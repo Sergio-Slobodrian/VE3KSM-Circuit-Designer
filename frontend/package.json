@@ -1,0 +1,24 @@
+{
+  "name": "circuit-lab-frontend",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Circuit Lab frontend — React + Vite, plain JavaScript only in the browser.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 5173"
+  },
+  "dependencies": {
+    "plotly.js-dist-min": "^2.35.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-plotly.js": "^2.6.0",
+    "uplot": "^1.6.31",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.3",
+    "vite": "^5.4.10"
+  }
+}

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Circuit Lab — schematic editor mockup</title>
+<style>
+:root{
+  --color-background-primary:#ffffff;
+  --color-background-secondary:#f7f5ee;
+  --color-background-tertiary:#f1efe8;
+  --color-background-info:#E6F1FB;
+  --color-background-success:#EAF3DE;
+  --color-background-warning:#FAEEDA;
+  --color-background-danger:#FCEBEB;
+  --color-text-primary:#1a1a1a;
+  --color-text-secondary:#5f5e5a;
+  --color-text-tertiary:#888780;
+  --color-text-info:#0C447C;
+  --color-text-success:#3B6D11;
+  --color-text-warning:#854F0B;
+  --color-text-danger:#791F1F;
+  --color-border-tertiary:rgba(0,0,0,0.12);
+  --color-border-secondary:rgba(0,0,0,0.25);
+  --color-border-primary:rgba(0,0,0,0.4);
+  --color-border-info:#185FA5;
+  --color-border-success:#639922;
+  --color-border-warning:#BA7517;
+  --color-border-danger:#A32D2D;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --border-radius-md:8px;
+  --border-radius-lg:12px;
+}
+body{margin:0;padding:24px 16px;font-family:var(--font-sans);font-size:14px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
+main{max-width:720px;margin:0 auto}
+h1.title{font-size:16px;font-weight:500;margin:0 0 16px;color:var(--color-text-secondary)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+</style>
+</head>
+<body>
+<main>
+<h1 class="title">Schematic editor with signal generator inspector</h1>
+
+<style>
+.app{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;font-size:13px;color:var(--color-text-primary)}
+.titlebar{background:var(--color-background-secondary);padding:7px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid var(--color-border-tertiary);gap:12px}
+.appname{font-weight:500;font-size:12px}
+.appname code{font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);font-weight:400;margin-left:6px}
+.menus{display:flex;gap:14px;color:var(--color-text-secondary);font-size:12px;flex:1}
+.runbtn{padding:4px 10px;font-size:11px;border-radius:4px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-success);color:var(--color-text-success);font-weight:500}
+.tabs{display:flex;background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);padding:0 8px}
+.tab{padding:7px 13px;font-size:12px;color:var(--color-text-secondary);border-bottom:2px solid transparent}
+.tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-text-primary)}
+.workspace{display:grid;grid-template-columns:128px 1fr}
+.palette{border-right:0.5px solid var(--color-border-tertiary);padding:8px 6px}
+.palgroup{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-tertiary);margin:9px 4px 3px;font-weight:500}
+.palgroup:first-child{margin-top:2px}
+.palitem{display:flex;align-items:center;gap:7px;padding:3px 6px;border-radius:4px;font-size:12px}
+.palitem:hover{background:var(--color-background-secondary)}
+.palitem svg{flex-shrink:0;color:var(--color-text-secondary)}
+.canvas{background-image:radial-gradient(circle,var(--color-border-tertiary) 0.7px,transparent 0.7px);background-size:14px 14px;background-position:7px 7px;background-color:var(--color-background-primary);position:relative}
+.canvas svg{display:block;width:100%;height:auto;color:var(--color-text-primary)}
+.canvas svg .lbl{font-family:var(--font-mono);font-size:9px;fill:var(--color-text-secondary)}
+.canvas svg .ref{font-family:var(--font-mono);font-size:10px;font-weight:500;fill:var(--color-text-primary)}
+.canvas svg .sel{stroke:var(--color-border-info);stroke-width:1;stroke-dasharray:3 2;fill:none}
+.canvas svg .probe{fill:var(--color-text-info)}
+.statusbar{background:var(--color-background-secondary);border-top:0.5px solid var(--color-border-tertiary);padding:4px 12px;font-size:10px;color:var(--color-text-tertiary);font-family:var(--font-mono);display:flex;gap:18px}
+.inspector{border-top:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);padding:11px 12px}
+.insp-head{display:flex;align-items:baseline;gap:10px;margin-bottom:9px}
+.insp-title{font-weight:500;font-size:13px}
+.insp-sub{font-size:11px;color:var(--color-text-secondary);font-family:var(--font-mono)}
+.insp-pill{font-size:10px;background:var(--color-background-info);color:var(--color-text-info);padding:2px 7px;border-radius:10px;font-weight:500;margin-left:auto}
+.wave-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:11px}
+.wave-btn{padding:5px 9px;font-size:11px;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);border-radius:4px;color:var(--color-text-secondary);display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-family:inherit}
+.wave-btn:hover{border-color:var(--color-border-secondary);color:var(--color-text-primary)}
+.wave-btn.active{border-color:var(--color-border-info);background:var(--color-background-info);color:var(--color-text-info)}
+.wave-btn svg{flex-shrink:0}
+.split{display:grid;grid-template-columns:1fr 200px;gap:14px}
+.params{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:9px 12px}
+.param label{display:block;font-size:10.5px;color:var(--color-text-secondary);margin-bottom:3px}
+.param-input{display:flex;align-items:center;border:0.5px solid var(--color-border-tertiary);border-radius:4px;background:var(--color-background-primary);height:28px;overflow:hidden}
+.param-input input,.param-input select{flex:1;border:none;outline:none;height:100%;padding:0 8px;font-size:12px;font-family:var(--font-mono);background:transparent;color:var(--color-text-primary);min-width:0}
+.param-input .unit{font-size:10.5px;color:var(--color-text-tertiary);font-family:var(--font-mono);padding:0 8px;border-left:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);height:100%;display:flex;align-items:center}
+.preview{background:#0a0d12;border-radius:6px;padding:9px 10px;display:flex;flex-direction:column;gap:5px;height:fit-content}
+.preview-head{font-size:10px;color:#5fa896;letter-spacing:0.06em;font-family:var(--font-mono);display:flex;justify-content:space-between}
+.preview-head em{color:#b3c5c0;font-style:normal}
+.preview svg{display:block;width:100%}
+.preview-foot{font-size:9.5px;color:#5fa896;font-family:var(--font-mono);display:flex;justify-content:space-between}
+.outrow{display:flex;align-items:center;gap:14px;margin-top:11px;padding-top:10px;border-top:0.5px solid var(--color-border-tertiary);flex-wrap:wrap}
+.outrow .lab{font-size:10.5px;color:var(--color-text-secondary)}
+.zgroup{display:flex}
+.zgroup button{padding:4px 9px;font-size:11px;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-secondary);font-family:var(--font-mono);cursor:pointer}
+.zgroup button:first-child{border-radius:4px 0 0 4px}
+.zgroup button:last-child{border-radius:0 4px 4px 0}
+.zgroup button:not(:first-child){border-left:none}
+.zgroup button.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)}
+</style>
+
+<div class="app">
+  <div class="titlebar">
+    <div class="appname">Circuit lab <code>preamp_12ax7.cir</code></div>
+    <div class="menus"><span>File</span><span>Edit</span><span>Simulate</span><span>View</span><span>Library</span></div>
+    <button class="runbtn">▶ Run sim</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active">Schematic</div>
+    <div class="tab">Scope</div>
+    <div class="tab">Spectrum</div>
+    <div class="tab">Network analyzer</div>
+    <div class="tab">Netlist</div>
+  </div>
+  <div class="workspace">
+    <div class="palette">
+      <div class="palgroup">Passive</div>
+      <div class="palitem"><svg width="22" height="10" viewBox="0 0 22 10" fill="none" stroke="currentColor" stroke-width="1"><path d="M0 5 H4 L6 1 L9 9 L12 1 L15 9 L17 5 H22"/></svg>Resistor</div>
+      <div class="palitem"><svg width="22" height="10" viewBox="0 0 22 10" fill="none" stroke="currentColor" stroke-width="1"><path d="M0 5 H9 M9 1 V9 M13 1 V9 M13 5 H22"/></svg>Capacitor</div>
+      <div class="palitem"><svg width="22" height="10" viewBox="0 0 22 10" fill="none" stroke="currentColor" stroke-width="1"><path d="M0 5 H3 M19 5 H22"/><path d="M3 5 a2.5 2.5 0 0 1 4 0 a2.5 2.5 0 0 1 4 0 a2.5 2.5 0 0 1 4 0 a2.5 2.5 0 0 1 4 0" fill="none"/></svg>Inductor</div>
+      <div class="palgroup">Active</div>
+      <div class="palitem"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="7" r="5.5"/><path d="M8 7 H14 M8 4 L14 4 M8 10 L14 10 M14 4 L18 1 M14 10 L18 13 M8 7 H4"/></svg>BJT</div>
+      <div class="palitem"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="7" r="5.5"/><path d="M8 4 V10 M9 7 H14 M14 4 L18 1 M14 10 L18 13 M9 7 H4"/></svg>FET / MOSFET</div>
+      <div class="palitem"><svg width="22" height="16" viewBox="0 0 22 16" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="8" r="6"/><path d="M11 2 V0 M7 5 H15 M11 14 V16" /><path d="M5 8 H17" stroke-dasharray="1.5 1.2"/><path d="M3 8 H5"/></svg>Vacuum tube</div>
+      <div class="palgroup">Sources</div>
+      <div class="palitem"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="7" r="5"/><path d="M7 7 q2 -3 4 0 t4 0"/><path d="M11 0 V2 M11 12 V14"/></svg>Signal source</div>
+      <div class="palitem"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1"><path d="M11 1 V13 M5 6 H17 M7 9 H15 M9 12 H13"/></svg>Ground</div>
+      <div class="palgroup">Probes</div>
+      <div class="palitem"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1"><path d="M2 12 L10 4 M2 12 L4 14 L12 6 M10 4 L18 6 M14 2 L20 8"/></svg>Voltage</div>
+      <div class="palitem"><svg width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="7" r="5"/><path d="M11 4 V10 M9 7 H13"/></svg>Current</div>
+    </div>
+    <div class="canvas">
+      <svg viewBox="0 0 540 290">
+        <line x1="270" y1="30" x2="510" y2="30" stroke="currentColor" stroke-width="0.9"/>
+        <text class="ref" x="514" y="33">+B</text>
+        <text class="lbl" x="514" y="44">+250 V</text>
+
+        <g stroke="currentColor" stroke-width="0.9" fill="none">
+          <circle cx="50" cy="190" r="17"/>
+          <path d="M42 190 q4 -7 8 0 t8 0"/>
+          <line x1="50" y1="173" x2="50" y2="135"/>
+          <line x1="50" y1="207" x2="50" y2="232"/>
+        </g>
+        <text class="ref" x="22" y="195">V1</text>
+        <text class="lbl" x="14" y="208">SIG GEN</text>
+        <rect class="sel" x="28" y="170" width="44" height="40" rx="3"/>
+
+        <g stroke="currentColor" stroke-width="0.9" fill="none">
+          <line x1="50" y1="135" x2="105" y2="135"/>
+          <line x1="105" y1="127" x2="105" y2="143"/>
+          <line x1="111" y1="127" x2="111" y2="143"/>
+          <line x1="111" y1="135" x2="220" y2="135"/>
+        </g>
+        <text class="ref" x="98" y="121">C1</text>
+        <text class="lbl" x="98" y="158">10 nF</text>
+
+        <g stroke="currentColor" stroke-width="0.9" fill="none">
+          <line x1="220" y1="135" x2="220" y2="158"/>
+          <rect x="214" y="158" width="12" height="34"/>
+          <line x1="220" y1="192" x2="220" y2="232"/>
+        </g>
+        <text class="ref" x="232" y="172">R1</text>
+        <text class="lbl" x="232" y="184">1M</text>
+
+        <line x1="220" y1="135" x2="276" y2="135" stroke="currentColor" stroke-width="0.9"/>
+
+        <g stroke="currentColor" stroke-width="0.9" fill="none">
+          <circle cx="310" cy="135" r="22"/>
+          <line x1="310" y1="113" x2="310" y2="105"/>
+          <line x1="302" y1="118" x2="318" y2="118"/>
+          <line x1="287" y1="135" x2="305" y2="135" stroke-dasharray="1.8 1.4"/>
+          <line x1="276" y1="135" x2="287" y2="135"/>
+          <polyline points="302,150 306,146 314,146 318,150"/>
+          <line x1="310" y1="150" x2="310" y2="172"/>
+        </g>
+        <text class="ref" x="295" y="103">V2</text>
+        <text class="lbl" x="338" y="123">12AX7</text>
+        <text class="lbl" x="338" y="133">triode</text>
+
+        <g stroke="currentColor" stroke-width="0.9" fill="none">
+          <line x1="310" y1="105" x2="310" y2="78"/>
+          <rect x="304" y="46" width="12" height="32"/>
+          <line x1="310" y1="46" x2="310" y2="30"/>
+          <circle cx="310" cy="105" r="1.4" fill="currentColor"/>
+        </g>
+        <text class="ref" x="322" y="63">R2</text>
+        <text class="lbl" x="322" y="75">100k</text>
+
+        <g stroke="currentColor" stroke-width="0.9" fill="none">
+          <line x1="310" y1="172" x2="310" y2="190"/>
+          <rect x="304" y="190" width="12" height="32"/>
+          <line x1="310" y1="222" x2="310" y2="245"/>
+        </g>
+        <text class="ref" x="322" y="208">R3</text>
+        <text class="lbl" x="322" y="220">1.5k</text>
+
+        <g stroke="currentColor" stroke-width="0.9" fill="none">
+          <line x1="310" y1="105" x2="395" y2="105"/>
+          <line x1="395" y1="97" x2="395" y2="113"/>
+          <line x1="401" y1="97" x2="401" y2="113"/>
+          <line x1="401" y1="105" x2="475" y2="105"/>
+        </g>
+        <text class="ref" x="388" y="91">C2</text>
+        <text class="lbl" x="388" y="128">0.1 µF</text>
+
+        <g class="probe">
+          <circle cx="475" cy="105" r="3"/>
+          <path d="M475 90 L475 102 M467 92 L483 92 L475 102 Z" stroke="currentColor" stroke-width="0.9" fill="none"/>
+          <text class="ref" x="464" y="84" style="fill:var(--color-text-info)">Vout</text>
+        </g>
+
+        <g stroke="currentColor" stroke-width="0.9" fill="none">
+          <path d="M44 232 H56 M46 235 H54 M48 238 H52"/>
+          <path d="M214 232 H226 M216 235 H224 M218 238 H222"/>
+          <path d="M304 245 H316 M306 248 H314 M308 251 H312"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <div class="inspector">
+    <div class="insp-head">
+      <span class="insp-title">V1 — voltage source</span>
+      <span class="insp-sub">node: in_ac → 0</span>
+      <span class="insp-pill">signal generator</span>
+    </div>
+
+    <div class="wave-row" id="waverow"></div>
+
+    <div class="split">
+      <div class="params" id="params"></div>
+      <div class="preview">
+        <div class="preview-head"><span id="pv-name">Sine</span><em id="pv-meta">1.000 kHz</em></div>
+        <svg viewBox="0 0 200 70" preserveAspectRatio="none" style="height:70px">
+          <line x1="0" y1="35" x2="200" y2="35" stroke="#1a3a3a" stroke-width="0.5" stroke-dasharray="2 3"/>
+          <path id="pv-path" stroke="#5fcab0" stroke-width="1.4" fill="none"/>
+        </svg>
+        <div class="preview-foot"><span>2 ms / div</span><span>0.5 V / div</span></div>
+      </div>
+    </div>
+
+    <div class="outrow">
+      <span class="lab">Source type</span>
+      <div class="zgroup"><button class="active">Voltage</button><button>Current</button></div>
+      <span class="lab">Output Z</span>
+      <div class="zgroup"><button class="active">0 Ω</button><button>50</button><button>75</button><button>600</button></div>
+      <span class="lab">Coupling</span>
+      <div class="zgroup"><button class="active">DC</button><button>AC</button></div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span>Engine: ngspice 42 (subprocess)</span>
+    <span>Grid: 14 px</span>
+    <span>Selected: V1</span>
+    <span>Nodes: 5</span>
+    <span style="margin-left:auto;color:var(--color-text-success)">● Ready</span>
+  </div>
+</div>
+
+<script>
+const W = {
+  sine: {label:'Sine', meta:f=>`${f.freq.v} ${f.freq.u}`, params:[
+    {k:'freq', l:'Frequency', v:'1.000', u:'kHz'},
+    {k:'amp', l:'Amplitude', v:'1.000', u:'Vpp'},
+    {k:'off', l:'DC offset', v:'0.000', u:'V'},
+    {k:'ph', l:'Phase', v:'0', u:'°'}
+  ], path:()=>{
+    let p='M0 35'; for(let x=0;x<=200;x+=2){const y=35-22*Math.sin(x*Math.PI/25);p+=` L${x} ${y.toFixed(1)}`;} return p;
+  }},
+  square: {label:'Square', meta:f=>`${f.freq.v} ${f.freq.u} · ${f.duty.v}%`, params:[
+    {k:'freq', l:'Frequency', v:'1.000', u:'kHz'},
+    {k:'amp', l:'Amplitude', v:'1.000', u:'Vpp'},
+    {k:'off', l:'DC offset', v:'0.000', u:'V'},
+    {k:'duty', l:'Duty cycle', v:'50', u:'%'},
+    {k:'tr', l:'Rise time', v:'10', u:'ns'},
+    {k:'tf', l:'Fall time', v:'10', u:'ns'}
+  ], path:()=>'M0 57 V13 H50 V57 H100 V13 H150 V57 H200'},
+  triangle: {label:'Triangle', meta:f=>`${f.freq.v} ${f.freq.u}`, params:[
+    {k:'freq', l:'Frequency', v:'1.000', u:'kHz'},
+    {k:'amp', l:'Amplitude', v:'1.000', u:'Vpp'},
+    {k:'off', l:'DC offset', v:'0.000', u:'V'},
+    {k:'sym', l:'Symmetry', v:'50', u:'%'}
+  ], path:()=>'M0 35 L25 13 L75 57 L125 13 L175 57 L200 35'},
+  sawtooth: {label:'Sawtooth', meta:f=>`${f.freq.v} ${f.freq.u} · ${f.dir.v}`, params:[
+    {k:'freq', l:'Frequency', v:'1.000', u:'kHz'},
+    {k:'amp', l:'Amplitude', v:'1.000', u:'Vpp'},
+    {k:'off', l:'DC offset', v:'0.000', u:'V'},
+    {k:'dir', l:'Direction', v:'rising', sel:['rising','falling']}
+  ], path:()=>'M0 57 L50 13 L50 57 L100 13 L100 57 L150 13 L150 57 L200 13'},
+  pulse: {label:'Pulse', meta:f=>`${f.pw.v} ${f.pw.u} / ${f.per.v} ${f.per.u}`, params:[
+    {k:'per', l:'Period', v:'2.000', u:'ms'},
+    {k:'pw', l:'Pulse width', v:'200', u:'µs'},
+    {k:'tr', l:'Rise time', v:'50', u:'ns'},
+    {k:'tf', l:'Fall time', v:'50', u:'ns'},
+    {k:'vlo', l:'V low', v:'0', u:'V'},
+    {k:'vhi', l:'V high', v:'5', u:'V'},
+    {k:'td', l:'Delay', v:'0', u:'ms'}
+  ], path:()=>'M0 57 H30 V13 H50 V57 H120 V13 H140 V57 H200'},
+  noise: {label:'Noise', meta:f=>`${f.type.v} · ${f.bw.v} ${f.bw.u}`, params:[
+    {k:'type', l:'Type', v:'white', sel:['white','pink','1/f²','band-limited']},
+    {k:'rms', l:'RMS amplitude', v:'100', u:'mVrms'},
+    {k:'bw', l:'Bandwidth', v:'20', u:'kHz'},
+    {k:'seed', l:'Seed', v:'42', u:''}
+  ], path:()=>{
+    let p='M0 35', y=35; const r=()=>{y+=(Math.random()-0.5)*16; y=Math.max(15,Math.min(55,y)); return y;};
+    for(let x=4;x<=200;x+=4) p+=` L${x} ${r().toFixed(1)}`; return p;
+  }},
+  sweep: {label:'Chirp / sweep', meta:f=>`${f.f0.v} ${f.f0.u} → ${f.f1.v} ${f.f1.u}`, params:[
+    {k:'f0', l:'Start frequency', v:'20', u:'Hz'},
+    {k:'f1', l:'Stop frequency', v:'20', u:'kHz'},
+    {k:'dur', l:'Sweep time', v:'1.000', u:'s'},
+    {k:'amp', l:'Amplitude', v:'1.000', u:'Vpp'},
+    {k:'shape', l:'Shape', v:'log', sel:['linear','log','exponential']},
+    {k:'mode', l:'Mode', v:'one-shot', sel:['one-shot','continuous','triggered']}
+  ], path:()=>{
+    let p='M0 35'; for(let x=0;x<=200;x+=1){const f=0.05+x*0.0006*x; const y=35-22*Math.sin(x*f); p+=` L${x} ${y.toFixed(1)}`;} return p;
+  }},
+  twotone: {label:'Two-tone', meta:f=>`${f.f1.v}/${f.f2.v} ${f.f1.u}`, params:[
+    {k:'f1', l:'Frequency 1', v:'700', u:'Hz'},
+    {k:'f2', l:'Frequency 2', v:'1900', u:'Hz'},
+    {k:'a1', l:'Amplitude 1', v:'0.500', u:'Vpp'},
+    {k:'a2', l:'Amplitude 2', v:'0.500', u:'Vpp'},
+    {k:'dphi', l:'Δ phase', v:'0', u:'°'}
+  ], path:()=>{
+    let p='M0 35'; for(let x=0;x<=200;x+=1){const y=35-11*Math.sin(x*Math.PI/40)-11*Math.sin(x*Math.PI/14.7); p+=` L${x} ${y.toFixed(1)}`;} return p;
+  }},
+  am: {label:'AM', meta:f=>`fc ${f.fc.v} ${f.fc.u} · ${f.depth.v}%`, params:[
+    {k:'fc', l:'Carrier freq', v:'1.000', u:'MHz'},
+    {k:'fm', l:'Mod freq', v:'1.000', u:'kHz'},
+    {k:'depth', l:'Mod depth', v:'80', u:'%'},
+    {k:'amp', l:'Carrier ampl', v:'1.000', u:'Vpp'},
+    {k:'shape', l:'Mod shape', v:'sine', sel:['sine','two-tone','speech-like']}
+  ], path:()=>{
+    let p='M0 35'; for(let x=0;x<=200;x+=1){const env=1+0.8*Math.sin(x*Math.PI/100); const y=35-15*env*Math.sin(x*1.05); p+=` L${x} ${y.toFixed(1)}`;} return p;
+  }},
+  fm: {label:'FM', meta:f=>`fc ${f.fc.v} ${f.fc.u} · Δf ${f.dev.v} ${f.dev.u}`, params:[
+    {k:'fc', l:'Carrier freq', v:'10.7', u:'MHz'},
+    {k:'fm', l:'Mod freq', v:'1.000', u:'kHz'},
+    {k:'dev', l:'Deviation', v:'5.0', u:'kHz'},
+    {k:'amp', l:'Amplitude', v:'1.000', u:'Vpp'}
+  ], path:()=>{
+    let p='M0 35'; let ph=0; for(let x=0;x<=200;x+=1){const inst=0.7+0.5*Math.sin(x*Math.PI/100); ph+=inst; const y=35-22*Math.sin(ph); p+=` L${x} ${y.toFixed(1)}`;} return p;
+  }},
+  pwl: {label:'Arbitrary / PWL', meta:f=>`${f.src.v}`, params:[
+    {k:'src', l:'Source', v:'(none loaded)', sel:['(none loaded)','impulse.csv','speech_48k.wav','iq_capture.bin']},
+    {k:'rate', l:'Sample rate', v:'48', u:'kHz'},
+    {k:'loop', l:'Loop', v:'true', sel:['true','false']},
+    {k:'gain', l:'Gain', v:'1.0', u:'×'}
+  ], path:()=>'M0 35 L20 35 L25 14 L30 56 L35 35 L60 35 L80 28 L100 42 L120 22 L140 48 L160 35 L200 35'}
+};
+
+const order = ['sine','square','triangle','sawtooth','pulse','noise','sweep','twotone','am','fm','pwl'];
+const icon = {
+  sine:'M0 5 q3 -5 6 0 t6 0',
+  square:'M0 9 V1 H6 V9 H12 V1',
+  triangle:'M0 9 L3 1 L9 9 L12 5',
+  sawtooth:'M0 9 L6 1 L6 9 L12 1',
+  pulse:'M0 9 H3 V1 H5 V9 H9 V1 H11 V9',
+  noise:'M0 5 L2 2 L4 7 L6 3 L8 8 L10 4 L12 6',
+  sweep:'M0 5 q1 -4 2 0 t2 0 q1 -4 2 0 t2 0 q0.7 -3 1.4 0',
+  twotone:'M0 5 q1.5 -4 3 0 q1.5 4 3 0 q1.5 -4 3 0 q1.5 4 3 0',
+  am:'M0 5 q1.5 -4 3 0 q1.5 4 3 0',
+  fm:'M0 5 q2 -4 4 0 q1 4 2 0 q2 -4 4 0',
+  pwl:'M0 5 H3 L4 1 L5 9 L6 5 H9 L10 3 L11 7 H12'
+};
+
+let active='sine';
+
+function fmtParams(){
+  const m={}; W[active].params.forEach(p=>m[p.k]=p); return m;
+}
+
+function render(){
+  const wf=W[active];
+  const row=document.getElementById('waverow');
+  row.innerHTML=order.map(k=>`<button class="wave-btn ${k===active?'active':''}" data-k="${k}"><svg width="14" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" stroke-width="1"><path d="${icon[k]}"/></svg>${W[k].label}</button>`).join('');
+  row.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{active=b.dataset.k;render();}));
+  const params=document.getElementById('params');
+  params.innerHTML=wf.params.map(p=>{
+    if(p.sel){
+      const opts=p.sel.map(o=>`<option ${o===p.v?'selected':''}>${o}</option>`).join('');
+      return `<div class="param"><label>${p.l}</label><div class="param-input"><select>${opts}</select></div></div>`;
+    }
+    return `<div class="param"><label>${p.l}</label><div class="param-input"><input value="${p.v}"/>${p.u?`<span class="unit">${p.u}</span>`:''}</div></div>`;
+  }).join('');
+  document.getElementById('pv-path').setAttribute('d', wf.path());
+  document.getElementById('pv-name').textContent = wf.label;
+  document.getElementById('pv-meta').textContent = wf.meta(fmtParams());
+}
+render();
+</script>
+
+</main>
+</body>
+</html>

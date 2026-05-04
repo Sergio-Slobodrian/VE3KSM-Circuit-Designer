@@ -1,0 +1,33 @@
+* Tube models — Norman Koren generalised triode form
+* Reference: http://www.normankoren.com/Audio/Tubemodspice_article.html
+*
+* Pin order: P (plate)  G (grid)  K (cathode)
+*
+* These parameters approximate published 12AX7 / 12AU7 curves; for
+* production work, fit the parameters to your own measurements.
+
+.SUBCKT 12AX7 P G K
++ PARAMS: MU=100 EX=1.4 KG1=600 KP=600 KVB=300 RGI=2000
++         CCG=2.3P CGP=2.4P CCP=0.9P
+E1 7 0 VALUE={V(P,K)/KP*LN(1+EXP(KP*(1/MU+V(G,K)/SQRT(KVB+V(P,K)*V(P,K)))))}
+RE1 7 0 1G
+G1 P K VALUE={(PWR(V(7),EX)+SGN(V(7))*PWR(V(7),EX))/KG1}
+RCP P K 1G
+C1 G P {CGP}
+C2 G K {CCG}
+C3 P K {CCP}
+R1 G 7 {RGI}
+.ENDS 12AX7
+
+.SUBCKT 12AU7 P G K
++ PARAMS: MU=17 EX=1.4 KG1=420 KP=300 KVB=300 RGI=2000
++         CCG=1.6P CGP=1.5P CCP=0.5P
+E1 7 0 VALUE={V(P,K)/KP*LN(1+EXP(KP*(1/MU+V(G,K)/SQRT(KVB+V(P,K)*V(P,K)))))}
+RE1 7 0 1G
+G1 P K VALUE={(PWR(V(7),EX)+SGN(V(7))*PWR(V(7),EX))/KG1}
+RCP P K 1G
+C1 G P {CGP}
+C2 G K {CCG}
+C3 P K {CCP}
+R1 G 7 {RGI}
+.ENDS 12AU7

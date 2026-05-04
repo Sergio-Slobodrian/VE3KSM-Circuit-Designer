@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Circuit Lab — scope and spectrum analyzer mockups</title>
+<style>
+:root{
+  --color-background-primary:#ffffff;
+  --color-background-secondary:#f7f5ee;
+  --color-background-tertiary:#f1efe8;
+  --color-background-info:#E6F1FB;
+  --color-background-success:#EAF3DE;
+  --color-background-danger:#FCEBEB;
+  --color-text-primary:#1a1a1a;
+  --color-text-secondary:#5f5e5a;
+  --color-text-tertiary:#888780;
+  --color-text-info:#0C447C;
+  --color-text-success:#3B6D11;
+  --color-text-danger:#791F1F;
+  --color-border-tertiary:rgba(0,0,0,0.12);
+  --color-border-secondary:rgba(0,0,0,0.25);
+  --color-border-info:#185FA5;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --border-radius-md:8px;
+  --border-radius-lg:12px;
+}
+body{margin:0;padding:24px 16px;font-family:var(--font-sans);font-size:14px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
+main{max-width:720px;margin:0 auto}
+h1.title{font-size:16px;font-weight:500;margin:0 0 16px;color:var(--color-text-secondary)}
+h2.subtitle{font-size:13px;font-weight:500;margin:24px 0 8px;color:var(--color-text-secondary)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+</style>
+</head>
+<body>
+<main>
+<h1 class="title">Scope and spectrum analyzer tabs</h1>
+
+<style>
+.app{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;font-size:13px;color:var(--color-text-primary)}
+.titlebar{background:var(--color-background-secondary);padding:7px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid var(--color-border-tertiary);gap:12px}
+.appname{font-weight:500;font-size:12px}
+.appname code{font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);font-weight:400;margin-left:6px}
+.menus{display:flex;gap:14px;color:var(--color-text-secondary);font-size:12px;flex:1}
+.runbtn{padding:4px 10px;font-size:11px;border-radius:4px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-success);color:var(--color-text-success);font-weight:500}
+.tabs{display:flex;background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);padding:0 8px}
+.tab{padding:7px 13px;font-size:12px;color:var(--color-text-secondary);border-bottom:2px solid transparent}
+.tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-text-primary)}
+.ws{display:grid;grid-template-columns:1fr 184px}
+.disp-pane{padding:9px;background:var(--color-background-secondary);border-right:0.5px solid var(--color-border-tertiary)}
+.screen{background:#0a0d12;border-radius:4px;border:0.5px solid #1a1f2a;overflow:hidden}
+.screen svg{display:block;width:100%;height:auto}
+.ctrl-pane{padding:10px;display:flex;flex-direction:column;gap:11px}
+.ctrl-section h4{font-size:9.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-tertiary);margin:0 0 6px 0;font-weight:500}
+.ctrl-row{display:flex;align-items:center;font-size:11px;font-family:var(--font-mono);padding:1.5px 0;gap:6px}
+.ctrl-row .lab{color:var(--color-text-secondary);flex:1}
+.ctrl-row .val{color:var(--color-text-primary);font-weight:500}
+.ctrl-row .val.muted{color:var(--color-text-tertiary)}
+.ch-row{display:flex;align-items:center;gap:7px;font-size:10.5px;font-family:var(--font-mono);padding:2px 0}
+.ch-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ch-name{font-weight:500;width:24px}
+.ch-set{color:var(--color-text-secondary);font-size:10px;flex:1}
+.ch-set.off{color:var(--color-text-tertiary)}
+.ch-state{font-size:9px;letter-spacing:0.04em;color:var(--color-text-tertiary);text-transform:uppercase}
+.ch-state.on{color:var(--color-text-success)}
+.meas-bar{background:var(--color-background-secondary);border-top:0.5px solid var(--color-border-tertiary);padding:9px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;font-family:var(--font-mono)}
+.meas-cell{display:flex;flex-direction:column;gap:2px;border-left:2px solid transparent;padding-left:8px}
+.meas-cell.ch1{border-left-color:#f5b840}
+.meas-cell.ch2{border-left-color:#5dcaa5}
+.meas-cell .l{color:var(--color-text-tertiary);font-size:9px;text-transform:uppercase;letter-spacing:0.05em}
+.meas-cell .v{color:var(--color-text-primary);font-size:12px;font-weight:500}
+.meas-cell .v small{color:var(--color-text-secondary);font-size:10px;font-weight:400;margin-left:1px}
+.harm-bar{background:var(--color-background-secondary);border-top:0.5px solid var(--color-border-tertiary);padding:9px 12px}
+.harm-summary{display:flex;gap:22px;margin-bottom:7px;font-family:var(--font-mono);flex-wrap:wrap}
+.harm-stat{display:flex;flex-direction:column;gap:2px}
+.harm-stat .l{color:var(--color-text-tertiary);font-size:9px;text-transform:uppercase;letter-spacing:0.05em}
+.harm-stat .v{font-size:12.5px;font-weight:500}
+.harm-table{font-family:var(--font-mono);font-size:10.5px;border-top:0.5px solid var(--color-border-tertiary);padding-top:7px}
+.harm-table table{width:100%;border-collapse:collapse}
+.harm-table th{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-text-tertiary);text-align:right;padding:1px 8px;font-family:var(--font-mono)}
+.harm-table th:first-child{text-align:left}
+.harm-table td{text-align:right;padding:2px 8px;color:var(--color-text-primary)}
+.harm-table td:first-child{text-align:left;color:var(--color-text-secondary)}
+.harm-table tr.fund td{color:#f5b840}
+.harm-table tr.fund td:first-child{color:#f5b840}
+.tabsep{height:14px}
+</style>
+
+<h2 class="subtitle">Scope tab</h2>
+<div class="app">
+  <div class="titlebar">
+    <div class="appname">Circuit lab <code>preamp_12ax7.cir</code></div>
+    <div class="menus"><span>File</span><span>Edit</span><span>Simulate</span><span>View</span></div>
+    <button class="runbtn">▶ Running</button>
+  </div>
+  <div class="tabs">
+    <div class="tab">Schematic</div>
+    <div class="tab active">Scope</div>
+    <div class="tab">Spectrum</div>
+    <div class="tab">Network analyzer</div>
+    <div class="tab">Netlist</div>
+  </div>
+
+  <div class="ws">
+    <div class="disp-pane">
+      <div class="screen">
+        <svg viewBox="0 0 600 280" preserveAspectRatio="none" style="height:280px">
+          <g stroke="#1a2230" stroke-width="0.5" fill="none">
+            <line x1="0" y1="35" x2="600" y2="35"/>
+            <line x1="0" y1="70" x2="600" y2="70"/>
+            <line x1="0" y1="105" x2="600" y2="105"/>
+            <line x1="0" y1="175" x2="600" y2="175"/>
+            <line x1="0" y1="210" x2="600" y2="210"/>
+            <line x1="0" y1="245" x2="600" y2="245"/>
+            <line x1="60" y1="0" x2="60" y2="280"/>
+            <line x1="120" y1="0" x2="120" y2="280"/>
+            <line x1="180" y1="0" x2="180" y2="280"/>
+            <line x1="240" y1="0" x2="240" y2="280"/>
+            <line x1="360" y1="0" x2="360" y2="280"/>
+            <line x1="420" y1="0" x2="420" y2="280"/>
+            <line x1="480" y1="0" x2="480" y2="280"/>
+            <line x1="540" y1="0" x2="540" y2="280"/>
+          </g>
+          <g stroke="#2a3548" stroke-width="0.6" fill="none">
+            <line x1="300" y1="0" x2="300" y2="280"/>
+            <line x1="0" y1="140" x2="600" y2="140"/>
+          </g>
+
+          <path id="ch1path" stroke="#f5b840" stroke-width="1.4" fill="none"/>
+          <path id="ch2path" stroke="#5dcaa5" stroke-width="1.4" fill="none"/>
+
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9.5">
+            <text x="6" y="100" fill="#f5b840">▶</text>
+            <text x="14" y="103" fill="#f5b840">1</text>
+            <text x="6" y="180" fill="#5dcaa5">▶</text>
+            <text x="14" y="183" fill="#5dcaa5">2</text>
+            <text x="588" y="103" fill="#a35f50" text-anchor="end">T◄</text>
+            <text x="6" y="14" fill="#7f8a9c">500 µs/div · 1 MS/s · 5 ms</text>
+            <text x="594" y="14" fill="#7f8a9c" text-anchor="end">CH1↑ 0 mV · auto</text>
+            <text x="6" y="272" fill="#f5b840">CH1 200 mV/div · DC · 1MΩ</text>
+            <text x="594" y="272" fill="#5dcaa5" text-anchor="end">CH2 1 V/div · DC · 1MΩ</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="ctrl-pane">
+      <div class="ctrl-section">
+        <h4>Channels</h4>
+        <div class="ch-row"><span class="ch-dot" style="background:#f5b840"></span><span class="ch-name">CH1</span><span class="ch-set">200mV DC</span><span class="ch-state on">on</span></div>
+        <div class="ch-row"><span class="ch-dot" style="background:#5dcaa5"></span><span class="ch-name">CH2</span><span class="ch-set">1V DC</span><span class="ch-state on">on</span></div>
+        <div class="ch-row"><span class="ch-dot" style="background:#d4537e;opacity:0.4"></span><span class="ch-name" style="color:var(--color-text-tertiary)">CH3</span><span class="ch-set off">—</span><span class="ch-state">off</span></div>
+        <div class="ch-row"><span class="ch-dot" style="background:#97c459;opacity:0.4"></span><span class="ch-name" style="color:var(--color-text-tertiary)">CH4</span><span class="ch-set off">—</span><span class="ch-state">off</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Time base</h4>
+        <div class="ctrl-row"><span class="lab">Time/div</span><span class="val">500 µs</span></div>
+        <div class="ctrl-row"><span class="lab">Position</span><span class="val">0.0 s</span></div>
+        <div class="ctrl-row"><span class="lab">Sample rate</span><span class="val">1 MS/s</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Trigger</h4>
+        <div class="ctrl-row"><span class="lab">Source</span><span class="val">CH1</span></div>
+        <div class="ctrl-row"><span class="lab">Slope</span><span class="val">↑ rising</span></div>
+        <div class="ctrl-row"><span class="lab">Level</span><span class="val">0 mV</span></div>
+        <div class="ctrl-row"><span class="lab">Mode</span><span class="val">auto</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Math</h4>
+        <div class="ctrl-row"><span class="lab">CH2 / CH1</span><span class="val">9.72×</span></div>
+        <div class="ctrl-row"><span class="lab">gain (dB)</span><span class="val">19.75</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="meas-bar">
+    <div class="meas-cell ch1"><span class="l">CH1 Vpp</span><span class="v">501 <small>mV</small></span></div>
+    <div class="meas-cell ch1"><span class="l">CH1 Vrms</span><span class="v">177 <small>mV</small></span></div>
+    <div class="meas-cell ch1"><span class="l">CH1 freq</span><span class="v">1.0000 <small>kHz</small></span></div>
+    <div class="meas-cell ch1"><span class="l">CH1 period</span><span class="v">1.000 <small>ms</small></span></div>
+    <div class="meas-cell ch2"><span class="l">CH2 Vpp</span><span class="v">4.87 <small>V</small></span></div>
+    <div class="meas-cell ch2"><span class="l">CH2 Vrms</span><span class="v">1.71 <small>V</small></span></div>
+    <div class="meas-cell ch2"><span class="l">CH2 mean</span><span class="v">88.4 <small>V</small></span></div>
+    <div class="meas-cell ch2"><span class="l">CH2 phase</span><span class="v">179.8°</span></div>
+  </div>
+</div>
+
+<h2 class="subtitle">Spectrum analyzer tab</h2>
+<div class="app">
+  <div class="titlebar">
+    <div class="appname">Circuit lab <code>preamp_12ax7.cir</code></div>
+    <div class="menus"><span>File</span><span>Edit</span><span>Simulate</span><span>View</span></div>
+    <button class="runbtn">▶ Running</button>
+  </div>
+  <div class="tabs">
+    <div class="tab">Schematic</div>
+    <div class="tab">Scope</div>
+    <div class="tab active">Spectrum</div>
+    <div class="tab">Network analyzer</div>
+    <div class="tab">Netlist</div>
+  </div>
+
+  <div class="ws">
+    <div class="disp-pane">
+      <div class="screen">
+        <svg viewBox="0 0 600 280" preserveAspectRatio="none" style="height:280px">
+          <g stroke="#1a2230" stroke-width="0.5" fill="none">
+            <line x1="36" y1="38" x2="595" y2="38"/>
+            <line x1="36" y1="62" x2="595" y2="62"/>
+            <line x1="36" y1="86" x2="595" y2="86"/>
+            <line x1="36" y1="110" x2="595" y2="110"/>
+            <line x1="36" y1="158" x2="595" y2="158"/>
+            <line x1="36" y1="182" x2="595" y2="182"/>
+            <line x1="36" y1="206" x2="595" y2="206"/>
+            <line x1="36" y1="230" x2="595" y2="230"/>
+          </g>
+          <g stroke="#2a3548" stroke-width="0.6" fill="none">
+            <line x1="36" y1="14" x2="36" y2="254"/>
+            <line x1="36" y1="134" x2="595" y2="134"/>
+            <line x1="36" y1="254" x2="595" y2="254"/>
+          </g>
+          <g stroke="#1a2230" stroke-width="0.5" fill="none">
+            <line x1="176" y1="14" x2="176" y2="254"/>
+            <line x1="316" y1="14" x2="316" y2="254"/>
+            <line x1="455" y1="14" x2="455" y2="254"/>
+            <line x1="595" y1="14" x2="595" y2="254"/>
+          </g>
+
+          <path id="maxhold" stroke="#5dcaa5" stroke-width="0.7" fill="none" opacity="0.35"/>
+          <path id="spec" stroke="#f5b840" stroke-width="1.1" fill="none"/>
+
+          <g stroke="#f5b840" stroke-width="0.7" stroke-dasharray="2 2" fill="none">
+            <line x1="316" y1="14" x2="316" y2="34"/>
+          </g>
+          <g fill="#f5b840" font-family="ui-monospace, Menlo, monospace" font-size="9">
+            <polygon points="316,30 312,38 320,38"/>
+            <text x="324" y="26">M1 1.000 kHz · 0.0 dB</text>
+          </g>
+          <g stroke="#d4537e" stroke-width="0.7" stroke-dasharray="2 2" fill="none">
+            <line x1="358" y1="86" x2="358" y2="106"/>
+          </g>
+          <g fill="#d4537e" font-family="ui-monospace, Menlo, monospace" font-size="9">
+            <polygon points="358,102 354,110 362,110"/>
+            <text x="366" y="98">M2 Δ +1.000 kHz · −28.0 dB</text>
+          </g>
+
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#7f8a9c" text-anchor="end">
+            <text x="33" y="17">+10</text>
+            <text x="33" y="41">0</text>
+            <text x="33" y="65">−10</text>
+            <text x="33" y="89">−20</text>
+            <text x="33" y="113">−30</text>
+            <text x="33" y="137">−40</text>
+            <text x="33" y="161">−50</text>
+            <text x="33" y="185">−60</text>
+            <text x="33" y="209">−70</text>
+            <text x="33" y="233">−80</text>
+            <text x="33" y="257">−90</text>
+          </g>
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#7f8a9c" text-anchor="middle">
+            <text x="36" y="270">10 Hz</text>
+            <text x="176" y="270">100</text>
+            <text x="316" y="270">1k</text>
+            <text x="455" y="270">10k</text>
+            <text x="595" y="270">100 kHz</text>
+          </g>
+
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9.5">
+            <text x="46" y="14" fill="#7f8a9c">Ref 0 dBV · 10 dB/div · log f</text>
+            <text x="588" y="14" fill="#7f8a9c" text-anchor="end">RBW 1 Hz · Hann · avg ×16</text>
+            <rect x="46" y="245" width="9" height="4" fill="#f5b840"/>
+            <text x="58" y="249" fill="#f5b840">CH2 spectrum</text>
+            <rect x="146" y="245" width="9" height="4" fill="#5dcaa5" opacity="0.45"/>
+            <text x="158" y="249" fill="#5dcaa5">max hold</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="ctrl-pane">
+      <div class="ctrl-section">
+        <h4>Frequency</h4>
+        <div class="ctrl-row"><span class="lab">Start</span><span class="val">10 Hz</span></div>
+        <div class="ctrl-row"><span class="lab">Stop</span><span class="val">100 kHz</span></div>
+        <div class="ctrl-row"><span class="lab">Axis</span><span class="val">log</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Amplitude</h4>
+        <div class="ctrl-row"><span class="lab">Ref level</span><span class="val">0 dBV</span></div>
+        <div class="ctrl-row"><span class="lab">Scale</span><span class="val">10 dB/div</span></div>
+        <div class="ctrl-row"><span class="lab">Units</span><span class="val">dBV</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Analysis</h4>
+        <div class="ctrl-row"><span class="lab">Window</span><span class="val">Hann</span></div>
+        <div class="ctrl-row"><span class="lab">RBW</span><span class="val">1 Hz</span></div>
+        <div class="ctrl-row"><span class="lab">Detector</span><span class="val">RMS</span></div>
+        <div class="ctrl-row"><span class="lab">Average</span><span class="val">16</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Traces</h4>
+        <div class="ctrl-row"><span class="lab">Live</span><span class="val">CH2</span></div>
+        <div class="ctrl-row"><span class="lab">Max hold</span><span class="val">on</span></div>
+        <div class="ctrl-row"><span class="lab">A-weight</span><span class="val muted">off</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="harm-bar">
+    <div class="harm-summary">
+      <div class="harm-stat"><span class="l">THD (5 harm)</span><span class="v" style="color:#d85a30">4.06 %</span></div>
+      <div class="harm-stat"><span class="l">THD+N</span><span class="v">4.06 %</span></div>
+      <div class="harm-stat"><span class="l">SNR</span><span class="v">95.1 dB</span></div>
+      <div class="harm-stat"><span class="l">SINAD</span><span class="v">27.8 dB</span></div>
+      <div class="harm-stat"><span class="l">Noise floor</span><span class="v">−95 dBV</span></div>
+    </div>
+    <div class="harm-table">
+      <table>
+        <thead><tr><th>Harmonic</th><th>Frequency</th><th>Level</th><th>dBc</th><th>% rel</th><th>Phase</th></tr></thead>
+        <tbody>
+          <tr class="fund"><td>f₀ (fundamental)</td><td>1.0000 kHz</td><td>0.00 dBV</td><td>—</td><td>100.0 %</td><td>0.0°</td></tr>
+          <tr><td>2f₀</td><td>2.0000 kHz</td><td>−28.0 dBV</td><td>−28.0</td><td>3.98 %</td><td>178.4°</td></tr>
+          <tr><td>3f₀</td><td>3.0000 kHz</td><td>−42.0 dBV</td><td>−42.0</td><td>0.79 %</td><td>−2.1°</td></tr>
+          <tr><td>4f₀</td><td>4.0000 kHz</td><td>−58.0 dBV</td><td>−58.0</td><td>0.13 %</td><td>175.6°</td></tr>
+          <tr><td>5f₀</td><td>5.0000 kHz</td><td>−68.0 dBV</td><td>−68.0</td><td>0.04 %</td><td>−4.2°</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  let ch1='', ch2='';
+  for(let x=0; x<=600; x+=1){
+    const t = 2*Math.PI*x/120;
+    const y1 = 105 - 36*Math.sin(t);
+    const y2 = 175 + 60*Math.sin(t) + 4.5*Math.cos(2*t) + 1.4*Math.sin(3*t);
+    ch1 += (x===0?'M':' L') + x + ' ' + y1.toFixed(1);
+    ch2 += (x===0?'M':' L') + x + ' ' + y2.toFixed(1);
+  }
+  document.getElementById('ch1path').setAttribute('d', ch1);
+  document.getElementById('ch2path').setAttribute('d', ch2);
+
+  function f2x(f){ return 36 + Math.log10(f/10) * 139.75; }
+  function db2y(db){ return 38 - db * 2.4; }
+  const peaks = [
+    [60,   -76, 0.045],
+    [120,  -86, 0.045],
+    [1000,   0, 0.022],
+    [2000, -28, 0.022],
+    [3000, -42, 0.024],
+    [4000, -58, 0.026],
+    [5000, -68, 0.028],
+    [50000,-92, 0.05]
+  ];
+  function vAt(f){
+    let pwr = Math.pow(10, -9.5);
+    pwr *= (1 + 0.6*(Math.random()-0.5));
+    for(const [pf,pdb,w] of peaks){
+      const r = (Math.log10(f) - Math.log10(pf)) / w;
+      pwr += Math.pow(10, pdb/10) * Math.exp(-r*r);
+    }
+    return 10*Math.log10(pwr);
+  }
+  let trace='', hold='';
+  const N = 480;
+  let prevHold = -100;
+  for(let i=0;i<=N;i++){
+    const lf = 1 + (i/N)*4;
+    const f = Math.pow(10, lf);
+    const v = vAt(f);
+    const x = f2x(f);
+    const y = db2y(v);
+    trace += (i===0?'M':' L') + x.toFixed(1) + ' ' + y.toFixed(1);
+    const vh = v + 1.5 + Math.random()*1.8;
+    prevHold = Math.max(prevHold-0.05, vh);
+    const yh = db2y(prevHold);
+    hold += (i===0?'M':' L') + x.toFixed(1) + ' ' + yh.toFixed(1);
+  }
+  document.getElementById('spec').setAttribute('d', trace);
+  document.getElementById('maxhold').setAttribute('d', hold);
+})();
+</script>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,39 @@
+* 12AX7 common-cathode gain stage — preamp_12ax7.cir
+* Auto-synced with schematic — edit either side.
+
+.LIB tubes_koren.lib
+.PARAM B_PLUS = 250
+
+* --- supply ---
+VBB B+ 0 DC {B_PLUS}
+
+* --- input network ---
+V1 in_ac 0 SIN(0 0.25 1k)    ; sine 1 kHz, 500 mVpp
+C1 in_ac grid 100n
+R1 grid 0 1MEG
+
+* --- amplifier stage ---
+X1 plate grid cathode 12AX7  ; Koren triode model
+R2 B+ plate 100k
+R3 cathode 0 1.5k
+
+* --- output coupling ---
+C2 plate vout 100n
+
+* --- probes ---
+.SAVE V(in_ac) V(vout)
+
+* --- analyses ---
+.TRAN 1u 5m uic
+*.AC dec 200 10 100k
+
+.END
+
+*+ VBB pos=(450,30)  rot=0   mirror=false
+*+ V1  pos=(50,180)  rot=0   mirror=false probe=in_ac
+*+ C1  pos=(110,135) rot=0   mirror=false
+*+ R1  pos=(220,170) rot=90  mirror=false
+*+ X1  pos=(290,130) rot=0   mirror=false
+*+ R2  pos=(290,75)  rot=90  mirror=false
+*+ R3  pos=(290,200) rot=90  mirror=false
+*+ C2  pos=(390,105) rot=0   mirror=false probe=vout

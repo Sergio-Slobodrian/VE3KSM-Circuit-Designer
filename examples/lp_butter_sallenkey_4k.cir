@@ -1,0 +1,35 @@
+* Sallen-Key 2nd-order Butterworth low-pass — fc = 4 kHz, Q = 1/sqrt(2)
+* Unity-gain configuration. Op-amp modeled as ideal voltage-controlled source.
+
+.PARAM FC = 4000
+.PARAM Q  = 0.7071
+.PARAM R  = 3.9k
+.PARAM C  = 10n
+
+* --- input ---
+V1 in 0 AC 1 SIN(0 1 1k)
+
+* --- filter ---
+R1 in   n1  {R}
+R2 n1   n2  {R}
+C3 n1   out {C}
+C4 n2   0   {C}
+
+* --- ideal op-amp (unity-gain follower) ---
+E1 out 0 n2 out 1MEG
+
+* --- probes ---
+.SAVE V(in) V(out)
+
+* --- analyses ---
+.AC dec 200 10 100k
+*.TRAN 10u 10m
+
+.END
+
+*+ V1 pos=(40,180)  rot=0  mirror=false probe=in
+*+ R1 pos=(120,140) rot=0  mirror=false
+*+ R2 pos=(220,140) rot=0  mirror=false
+*+ C3 pos=(170,90)  rot=0  mirror=false
+*+ C4 pos=(280,180) rot=90 mirror=false
+*+ E1 pos=(360,140) rot=0  mirror=false probe=out

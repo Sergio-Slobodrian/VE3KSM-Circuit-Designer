@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Circuit Lab — netlist tab mockup</title>
+<style>
+:root{
+  --color-background-primary:#ffffff;
+  --color-background-secondary:#f7f5ee;
+  --color-background-tertiary:#f1efe8;
+  --color-background-success:#EAF3DE;
+  --color-text-primary:#1a1a1a;
+  --color-text-secondary:#5f5e5a;
+  --color-text-tertiary:#888780;
+  --color-text-success:#3B6D11;
+  --color-border-tertiary:rgba(0,0,0,0.12);
+  --color-border-secondary:rgba(0,0,0,0.25);
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --border-radius-md:8px;
+  --border-radius-lg:12px;
+}
+body{margin:0;padding:24px 16px;font-family:var(--font-sans);font-size:14px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
+main{max-width:720px;margin:0 auto}
+h1.title{font-size:16px;font-weight:500;margin:0 0 16px;color:var(--color-text-secondary)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+</style>
+</head>
+<body>
+<main>
+<h1 class="title">Netlist tab</h1>
+
+<style>
+.app{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;font-size:13px;color:var(--color-text-primary)}
+.titlebar{background:var(--color-background-secondary);padding:7px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid var(--color-border-tertiary);gap:12px}
+.appname{font-weight:500;font-size:12px}
+.appname code{font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);font-weight:400;margin-left:6px}
+.menus{display:flex;gap:14px;color:var(--color-text-secondary);font-size:12px;flex:1}
+.runbtn{padding:4px 10px;font-size:11px;border-radius:4px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-success);color:var(--color-text-success);font-weight:500}
+.tabs{display:flex;background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);padding:0 8px}
+.tab{padding:7px 13px;font-size:12px;color:var(--color-text-secondary);border-bottom:2px solid transparent}
+.tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-text-primary)}
+.ws{display:grid;grid-template-columns:1fr 168px}
+.editor-pane{padding:9px;background:var(--color-background-secondary);border-right:0.5px solid var(--color-border-tertiary)}
+.editor-screen{background:#0a0d12;border-radius:4px;border:0.5px solid #1a1f2a;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.editor-toolbar{display:flex;align-items:center;gap:5px;padding:6px 8px;border-bottom:0.5px solid #1a1f2a;background:#0e1117}
+.tb-btn{padding:3px 8px;border:0.5px solid #1f2530;background:transparent;color:#a0a8b8;border-radius:3px;font-size:10.5px;font-family:inherit}
+.tb-btn.primary{background:#1a3a3a;color:#5dcaa5;border-color:#2a4a4a}
+.tb-spacer{flex:1}
+.tb-status{font-size:10px;color:#5fa896}
+.editor-body{display:grid;grid-template-columns:32px 1fr;background:#0a0d12;max-height:400px;overflow:auto}
+.gutter{background:#0e1117;color:#3a4250;padding:8px 0;font-size:11.5px;line-height:1.65;border-right:0.5px solid #1a1f2a}
+.gutter span{display:block;padding:0 7px 0 4px;text-align:right;font-family:inherit}
+.code{padding:8px 12px;color:#cfd5e0;white-space:pre;overflow-x:auto;margin:0;font-size:11.5px;line-height:1.65}
+.code span{font-family:inherit}
+.t-cm{color:#5a6478}
+.t-dv{color:#d4537e;font-weight:500}
+.t-rf{color:#f5b840;font-weight:500}
+.t-nm{color:#5dcaa5}
+.t-kw{color:#c8a8e8}
+.t-nd{color:#8eb4f0}
+.t-st{color:#97c459}
+.t-pm{color:#e8a8b8}
+.t-op{color:#7f8a9c}
+.ctrl-pane{padding:10px;display:flex;flex-direction:column;gap:11px}
+.ctrl-section h4{font-size:9.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-tertiary);margin:0 0 6px 0;font-weight:500}
+.struct-row{display:flex;font-size:10.5px;font-family:var(--font-mono);padding:1.5px 0;color:var(--color-text-secondary)}
+.struct-row .lab{flex:1}
+.struct-row .cnt{color:var(--color-text-primary);font-weight:500}
+.lib-item{font-size:10.5px;font-family:var(--font-mono);padding:2px 0;color:#5dcaa5;display:flex;align-items:center;gap:6px}
+.lib-item::before{content:"⊕";opacity:0.7;font-size:11px}
+.ana-item{font-size:10px;font-family:var(--font-mono);padding:3px 0 5px}
+.ana-item.on{color:var(--color-text-success)}
+.ana-item.off{color:var(--color-text-tertiary)}
+.ana-item .cmd{font-weight:500;display:block}
+.ana-item .cmt{font-size:9.5px;color:var(--color-text-tertiary);margin-top:1px;display:block}
+.ctrl-row{display:flex;align-items:center;font-size:10.5px;font-family:var(--font-mono);padding:1.5px 0;gap:6px}
+.ctrl-row .lab{color:var(--color-text-secondary);flex:1}
+.ctrl-row .val{color:var(--color-text-primary);font-weight:500}
+.ctrl-row .val.ok{color:var(--color-text-success)}
+.statline{background:var(--color-background-secondary);border-top:0.5px solid var(--color-border-tertiary);padding:9px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;font-family:var(--font-mono)}
+.stcell{display:flex;flex-direction:column;gap:2px;border-left:2px solid #5dcaa5;padding-left:8px}
+.stcell.aux{border-left-color:var(--color-border-secondary)}
+.stcell .l{color:var(--color-text-tertiary);font-size:9px;text-transform:uppercase;letter-spacing:0.05em}
+.stcell .v{color:var(--color-text-primary);font-size:12px;font-weight:500}
+</style>
+
+<div class="app">
+  <div class="titlebar">
+    <div class="appname">Circuit lab <code>preamp_12ax7.cir</code></div>
+    <div class="menus"><span>File</span><span>Edit</span><span>Simulate</span><span>View</span></div>
+    <button class="runbtn">▶ Run</button>
+  </div>
+  <div class="tabs">
+    <div class="tab">Schematic</div>
+    <div class="tab">Scope</div>
+    <div class="tab">Spectrum</div>
+    <div class="tab">Network analyzer</div>
+    <div class="tab active">Netlist</div>
+  </div>
+
+  <div class="ws">
+    <div class="editor-pane">
+      <div class="editor-screen">
+        <div class="editor-toolbar">
+          <button class="tb-btn primary">Format</button>
+          <button class="tb-btn">Validate</button>
+          <button class="tb-btn">↻ Sync</button>
+          <button class="tb-btn">Export ▾</button>
+          <span class="tb-spacer"></span>
+          <span class="tb-status">⇄ in sync · ngspice 42</span>
+        </div>
+        <div class="editor-body">
+          <div class="gutter"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span><span>22</span><span>23</span><span>24</span><span>25</span><span>26</span><span>27</span><span>28</span><span>29</span><span>30</span></div><pre class="code"><span class="t-cm">* 12AX7 common-cathode gain stage — preamp_12ax7.cir</span>
+<span class="t-cm">* Auto-synced with schematic — edit either side.</span>
+
+<span class="t-dv">.LIB</span> <span class="t-st">tubes_koren.lib</span>
+<span class="t-dv">.PARAM</span> <span class="t-pm">B_PLUS</span> <span class="t-op">=</span> <span class="t-nm">250</span>
+
+<span class="t-cm">* --- supply ---</span>
+<span class="t-rf">VBB</span> <span class="t-nd">B+</span> <span class="t-nd">0</span> <span class="t-kw">DC</span> <span class="t-op">{</span><span class="t-pm">B_PLUS</span><span class="t-op">}</span>
+
+<span class="t-cm">* --- input network ---</span>
+<span class="t-rf">V1</span> <span class="t-nd">in_ac</span> <span class="t-nd">0</span> <span class="t-kw">SIN</span><span class="t-op">(</span><span class="t-nm">0</span> <span class="t-nm">0.25</span> <span class="t-nm">1k</span><span class="t-op">)</span>    <span class="t-cm">; sine 1 kHz, 500 mVpp</span>
+<span class="t-rf">C1</span> <span class="t-nd">in_ac</span> <span class="t-nd">grid</span> <span class="t-nm">10n</span>
+<span class="t-rf">R1</span> <span class="t-nd">grid</span> <span class="t-nd">0</span> <span class="t-nm">1MEG</span>
+
+<span class="t-cm">* --- amplifier stage ---</span>
+<span class="t-rf">X1</span> <span class="t-nd">plate</span> <span class="t-nd">grid</span> <span class="t-nd">cathode</span> <span class="t-kw">12AX7</span>  <span class="t-cm">; Koren triode model</span>
+<span class="t-rf">R2</span> <span class="t-nd">B+</span> <span class="t-nd">plate</span> <span class="t-nm">100k</span>
+<span class="t-rf">R3</span> <span class="t-nd">cathode</span> <span class="t-nd">0</span> <span class="t-nm">1.5k</span>
+
+<span class="t-cm">* --- output coupling ---</span>
+<span class="t-rf">C2</span> <span class="t-nd">plate</span> <span class="t-nd">vout</span> <span class="t-nm">100n</span>
+
+<span class="t-cm">* --- probes ---</span>
+<span class="t-dv">.SAVE</span> <span class="t-kw">V</span><span class="t-op">(</span><span class="t-nd">in_ac</span><span class="t-op">)</span> <span class="t-kw">V</span><span class="t-op">(</span><span class="t-nd">vout</span><span class="t-op">)</span>
+
+<span class="t-cm">* --- analyses ---</span>
+<span class="t-dv">.TRAN</span> <span class="t-nm">1u</span> <span class="t-nm">5m</span> <span class="t-kw">uic</span>
+<span class="t-cm">*.AC dec 200 10 100k</span>
+
+<span class="t-dv">.END</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="ctrl-pane">
+      <div class="ctrl-section">
+        <h4>Structure</h4>
+        <div class="struct-row"><span class="lab">Header</span><span class="cnt">2</span></div>
+        <div class="struct-row"><span class="lab">Libraries</span><span class="cnt">1</span></div>
+        <div class="struct-row"><span class="lab">Parameters</span><span class="cnt">1</span></div>
+        <div class="struct-row"><span class="lab">Sources</span><span class="cnt">2</span></div>
+        <div class="struct-row"><span class="lab">Passives</span><span class="cnt">5</span></div>
+        <div class="struct-row"><span class="lab">Subcircuits</span><span class="cnt">1</span></div>
+        <div class="struct-row"><span class="lab">Probes</span><span class="cnt">2</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Libraries</h4>
+        <div class="lib-item">tubes_koren.lib</div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Analyses</h4>
+        <div class="ana-item on"><span class="cmd">✓ .TRAN 1u 5m uic</span><span class="cmt">transient, 5 ms window</span></div>
+        <div class="ana-item off"><span class="cmd">◌ .AC dec 200 10 100k</span><span class="cmt">commented out</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Sync</h4>
+        <div class="ctrl-row"><span class="lab">State</span><span class="val ok">⇄ in sync</span></div>
+        <div class="ctrl-row"><span class="lab">Last edit</span><span class="val">schematic 12s</span></div>
+        <div class="ctrl-row"><span class="lab">Round-trip</span><span class="val">lossless</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statline">
+    <div class="stcell"><span class="l">Parser</span><span class="v">✓ ok · 0 warn</span></div>
+    <div class="stcell aux"><span class="l">Elements</span><span class="v">8 · 5 nodes</span></div>
+    <div class="stcell aux"><span class="l">Sync</span><span class="v">⇄ schematic</span></div>
+    <div class="stcell aux"><span class="l">Target</span><span class="v">ngspice 42</span></div>
+  </div>
+</div>
+
+</main>
+</body>
+</html>

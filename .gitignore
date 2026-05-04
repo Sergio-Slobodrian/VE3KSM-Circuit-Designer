@@ -1,0 +1,28 @@
+# Go
+/backend/bin/
+*.test
+*.out
+/backend/coverage.txt
+bin
+*:Zone.Identifier
+
+# Node
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+
+# Simulation artifacts (raw output from ngspice runs)
+*.raw
+*.log
+/runs/

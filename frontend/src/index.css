@@ -1,0 +1,827 @@
+/* Circuit Lab — global tokens and layout. The palette mirrors the mockups in
+   mockups/01_schematic_editor.html. Component-local styling is co-located,
+   per DESIGN.md §12 ("Frontend"). */
+
+:root {
+  --bg-primary:    #ffffff;
+  --bg-secondary:  #f7f5ee;
+  --bg-tertiary:   #f1efe8;
+  --bg-screen:     #0a0d12;
+  --bg-info:       #E6F1FB;
+
+  --text-primary:   #1a1a1a;
+  --text-secondary: #5f5e5a;
+  --text-tertiary:  #888780;
+  --text-info:      #0C447C;
+  --text-success:   #3B6D11;
+  --text-warning:   #854F0B;
+  --text-danger:    #791F1F;
+
+  --border:         rgba(0, 0, 0, 0.12);
+  --border-strong:  rgba(0, 0, 0, 0.25);
+
+  --selection-color: #185FA5;
+  --probe-color:     #0C447C;
+
+  --accent-yellow:  #f5b840;
+  --accent-teal:    #5dcaa5;
+  --accent-pink:    #d4537e;
+  --accent-green:   #97c459;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+button { font-family: inherit; }
+
+/* ------ App shell --------------------------------------------------------- */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary);
+}
+
+.app-titlebar {
+  background: var(--bg-secondary);
+  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 0.5px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.app-name code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.app-backend-status {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.app-backend-status.is-on  { color: var(--text-success); }
+.app-backend-status.is-off { color: var(--text-tertiary); }
+
+.app-tabs {
+  display: flex;
+  background: var(--bg-secondary);
+  border-bottom: 0.5px solid var(--border);
+  padding: 0 8px;
+}
+
+.app-tab {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.app-tab.is-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+.placeholder {
+  margin: 32px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 32px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.placeholder-title {
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+
+.placeholder code {
+  font-family: var(--font-mono);
+}
+
+/* ------ Schematic tab ----------------------------------------------------- */
+
+.schematic {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.schematic-workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 156px 1fr 280px;
+  min-height: 0;
+}
+
+/* Palette --------------------------- */
+
+.palette {
+  border-right: 0.5px solid var(--border);
+  padding: 8px 6px;
+  background: var(--bg-secondary);
+  overflow-y: auto;
+}
+
+.palgroup {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  margin: 9px 4px 3px;
+  font-weight: 500;
+}
+
+.palette > div:first-child .palgroup { margin-top: 2px; }
+
+.palitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.palitem:hover { background: var(--bg-primary); }
+.palitem svg   { flex-shrink: 0; color: var(--text-secondary); }
+
+.palitem--disabled {
+  color: var(--text-tertiary);
+  opacity: 0.55;
+}
+
+.palette-hint {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  margin: 16px 6px 0;
+  padding: 6px;
+  border-top: 0.5px solid var(--border);
+}
+
+/* Canvas ---------------------------- */
+
+.canvas {
+  background-image: radial-gradient(circle, var(--border) 0.7px, transparent 0.7px);
+  background-size: 14px 14px;
+  background-position: 7px 7px;
+  background-color: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--text-primary);
+}
+
+.canvas .ref-label,
+.canvas .value-label {
+  pointer-events: none;
+}
+
+.canvas-message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.canvas-message--error {
+  color: var(--text-danger);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  padding: 24px;
+  text-align: center;
+}
+
+/* When a palette item is dragging over the canvas, tint the dot grid blue
+   so the user has unmistakable feedback that the drop zone is live. */
+.canvas--drop-hover {
+  background-color: var(--bg-info);
+  outline: 1.5px dashed var(--selection-color);
+  outline-offset: -4px;
+}
+
+.canvas-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-style: italic;
+  pointer-events: none;
+}
+
+.canvas svg .rubberband {
+  /* Just so the dashed border doesn't look gappy at small zoom levels. */
+  shape-rendering: crispEdges;
+}
+
+/* Inspector ------------------------- */
+
+.inspector {
+  border-left: 0.5px solid var(--border);
+  background: var(--bg-secondary);
+  padding: 12px 14px;
+  overflow-y: auto;
+}
+
+.insp-empty {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.insp-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.insp-title {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.insp-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.insp-pill {
+  font-size: 10px;
+  background: var(--bg-info);
+  color: var(--text-info);
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.insp-fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.insp-fields dt {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.insp-fields dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
+
+.insp-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.insp-btn {
+  width: 28px;
+  height: 26px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.insp-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.insp-btn--danger:hover {
+  border-color: var(--text-danger);
+  color: var(--text-danger);
+}
+
+.insp-input {
+  width: 100%;
+  height: 24px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  padding: 0 6px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.insp-input:focus { border-color: var(--selection-color); }
+.insp-input--mono { font-family: var(--font-mono); }
+
+.insp-multilist {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.insp-multilink {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 3px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.insp-multilink:hover { border-color: var(--selection-color); color: var(--selection-color); }
+
+kbd {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--text-secondary);
+}
+
+/* ------ Scope tab --------------------------------------------------------- */
+
+.scope {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.scope-workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  min-height: 0;
+}
+
+.scope-screen-pane {
+  background: var(--bg-secondary);
+  padding: 10px;
+  border-right: 0.5px solid var(--border);
+  min-height: 0;
+}
+
+.scope-screen {
+  position: relative;
+  height: 100%;
+  background: var(--bg-screen);
+  border: 0.5px solid #1a1f2a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.scope-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7f8a9c;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Make the uPlot canvas fill the screen pane and adopt scope colors. */
+.scope-plot {
+  position: absolute;
+  inset: 0;
+}
+
+/* On-screen V/div + time/div readouts that mimic a bench-scope bezel.
+   They sit on top of the uPlot canvas; pointer-events: none so cursor
+   tracking still works underneath. */
+.scope-legend {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #7f8a9c;
+  pointer-events: none;
+  padding: 2px 8px;
+}
+
+.scope-legend-top    { top: 4px; right: 8px; }
+/* Sits just above uPlot's x-axis label band (axis size = 28px, see
+   ScopeCanvas.jsx) so the V/div readouts don't collide with time ticks.
+   Real bench scopes overlay channel labels on the trace area like this. */
+.scope-legend-bottom { left: 8px; bottom: 32px; }
+
+.scope-plot .u-axis text  { fill: #7f8a9c !important; }
+.scope-plot .u-grid line  { stroke: #1a2230; }
+.scope-plot .u-cursor-pt  { display: none; }
+.scope-plot .u-select     { background: rgba(245, 184, 64, 0.08); border: 0.5px solid rgba(245, 184, 64, 0.3); }
+.scope-plot .u-over       { background: transparent; }
+.scope-plot .uplot        { color: #7f8a9c; font-family: var(--font-mono); }
+
+.scope-ctrl {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.scope-runbar {
+  display: flex;
+  gap: 6px;
+}
+
+.scope-run {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 0.5px solid var(--border-strong);
+  background: var(--bg-info);
+  color: var(--text-info);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.scope-run.is-running {
+  background: #FCEBEB;
+  color: var(--text-danger);
+}
+
+.scope-run:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scope-auto {
+  padding: 6px 10px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.scope-auto:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.scope-error {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: #FCEBEB;
+  color: var(--text-danger);
+  border-radius: 4px;
+  padding: 5px 8px;
+  white-space: pre-wrap;
+}
+
+.scope-section h4 {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin: 0 0 6px;
+  font-weight: 500;
+}
+
+.scope-row {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 2px 0;
+  gap: 6px;
+}
+
+.scope-row .lab { color: var(--text-secondary); flex: 1; }
+.scope-row .val { color: var(--text-primary); font-weight: 500; }
+.scope-row .val.muted { color: var(--text-tertiary); }
+
+.scope-ch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+  border-bottom: 0.5px solid var(--border);
+}
+.scope-ch:last-child { border-bottom: none; }
+
+.scope-ch-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.scope-ch-head .ch-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.scope-ch-head .ch-name { font-weight: 500; width: 28px; }
+.scope-ch-head .ch-probe {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+
+.scope-ch-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 14px;
+}
+
+.scope-ch-row .ch-coupling {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+
+.ch-invert {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-tertiary);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ch-invert.is-on {
+  background: var(--bg-info);
+  color: var(--text-info);
+  border-color: var(--text-info);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border: 0.5px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-primary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  overflow: hidden;
+}
+.stepper button {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.stepper button:hover { background: var(--bg-tertiary); }
+.stepper .val {
+  padding: 0 6px;
+  min-width: 56px;
+  text-align: center;
+  color: var(--text-primary);
+  border-left: 0.5px solid var(--border);
+  border-right: 0.5px solid var(--border);
+}
+
+.grid-brightness {
+  flex: 1;
+  height: 14px;
+  margin: 0 4px;
+  cursor: pointer;
+  accent-color: var(--text-secondary);
+}
+
+.scope-meas-bar {
+  background: var(--bg-secondary);
+  border-top: 0.5px solid var(--border);
+  padding: 8px 12px;
+  display: flex;
+  gap: 16px;
+  font-family: var(--font-mono);
+  flex-wrap: wrap;
+  font-size: 11px;
+}
+.scope-meas-bar.empty {
+  color: var(--text-tertiary);
+  justify-content: center;
+}
+.meas-block {
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 1px 10px;
+  align-content: start;
+}
+.meas-head {
+  grid-column: span 2;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.meas-cell { display: contents; }
+.meas-cell .l { color: var(--text-tertiary); }
+.meas-cell .v { color: var(--text-primary); font-weight: 500; }
+
+/* Cursor readout — wider left border + cool slate accent so it reads as a
+   distinct "live tracking" panel, separate from the static per-channel
+   measurement blocks beside it. */
+.meas-cursor {
+  border-left-color: var(--text-secondary);
+  border-left-width: 3px;
+  padding-left: 9px;
+  min-width: 120px;
+}
+.meas-cursor .meas-head { color: var(--text-secondary); }
+
+/* ------ Spectrum + Network tabs ------------------------------------------- */
+
+/* Reuse the scope layout shell for the analysis tabs. The grid + screen +
+   side panel + bottom readout pattern is identical; the only differences
+   are the chart inside the screen and the readouts in the bottom bar.
+   Keeping the class names parallel (.spectrum / .spectrum-workspace /
+   .spectrum-screen) lets the analysis views share the bench-instrument
+   look while having their own DOM tree for view-specific overlays. */
+
+.spectrum {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.spectrum-workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  min-height: 0;
+}
+
+.spectrum-screen-pane {
+  background: var(--bg-secondary);
+  padding: 10px;
+  border-right: 0.5px solid var(--border);
+  min-height: 0;
+}
+
+.spectrum-screen {
+  position: relative;
+  height: 100%;
+  background: var(--bg-screen);
+  border: 0.5px solid #1a1f2a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Plotly fills the screen area; let it claim 100% of the parent. */
+.spectrum-plot {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Bode is two stacked uPlot panes sharing the screen. The split is 60/40
+   with a thin divider so the magnitude plot gets the prime real estate
+   (audio amp work cares about the gain shape more than absolute phase). */
+.network-stack { padding: 0; }
+.bode-stack {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 3fr 2fr;
+}
+.bode-pane { position: relative; min-height: 0; }
+.bode-pane-mag   { border-bottom: 0.5px solid #1a2230; }
+.bode-pane-phase { /* default styling */ }
+
+.bode-pane .uplot       { color: #7f8a9c; font-family: var(--font-mono); }
+.bode-pane .u-axis text { fill: #7f8a9c !important; }
+.bode-pane .u-grid line { stroke: #1a2230; }
+.bode-pane .u-cursor-pt { display: none; }
+
+/* Status bar ------------------------ */
+
+.statusbar {
+  background: var(--bg-secondary);
+  border-top: 0.5px solid var(--border);
+  padding: 5px 14px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.statusbar select {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.statusbar .status-label {
+  color: var(--text-tertiary);
+}
+
+.statusbar .status-ok  { color: var(--text-success); }
+.statusbar .status-off { color: var(--text-tertiary); }
+.statusbar .status-dirty { color: var(--text-warning, #854F0B); font-weight: 500; }
+
+.statusbar-edit {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.statusbar-btn {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.statusbar-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.statusbar-btn:disabled { opacity: 0.4; cursor: not-allowed; }

@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Circuit Lab — network analyzer mockup</title>
+<style>
+:root{
+  --color-background-primary:#ffffff;
+  --color-background-secondary:#f7f5ee;
+  --color-background-tertiary:#f1efe8;
+  --color-background-success:#EAF3DE;
+  --color-text-primary:#1a1a1a;
+  --color-text-secondary:#5f5e5a;
+  --color-text-tertiary:#888780;
+  --color-text-success:#3B6D11;
+  --color-border-tertiary:rgba(0,0,0,0.12);
+  --color-border-secondary:rgba(0,0,0,0.25);
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --border-radius-md:8px;
+  --border-radius-lg:12px;
+}
+body{margin:0;padding:24px 16px;font-family:var(--font-sans);font-size:14px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
+main{max-width:720px;margin:0 auto}
+h1.title{font-size:16px;font-weight:500;margin:0 0 16px;color:var(--color-text-secondary)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+</style>
+</head>
+<body>
+<main>
+<h1 class="title">Network analyzer tab</h1>
+
+<style>
+.app{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;font-size:13px;color:var(--color-text-primary)}
+.titlebar{background:var(--color-background-secondary);padding:7px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid var(--color-border-tertiary);gap:12px}
+.appname{font-weight:500;font-size:12px}
+.appname code{font-family:var(--font-mono);font-size:11px;color:var(--color-text-secondary);font-weight:400;margin-left:6px}
+.menus{display:flex;gap:14px;color:var(--color-text-secondary);font-size:12px;flex:1}
+.runbtn{padding:4px 10px;font-size:11px;border-radius:4px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-success);color:var(--color-text-success);font-weight:500}
+.tabs{display:flex;background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);padding:0 8px}
+.tab{padding:7px 13px;font-size:12px;color:var(--color-text-secondary);border-bottom:2px solid transparent}
+.tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-text-primary)}
+.ws{display:grid;grid-template-columns:1fr 184px}
+.disp-pane{padding:9px;background:var(--color-background-secondary);border-right:0.5px solid var(--color-border-tertiary)}
+.screen{background:#0a0d12;border-radius:4px;border:0.5px solid #1a1f2a;overflow:hidden}
+.screen svg{display:block;width:100%;height:auto}
+.ctrl-pane{padding:10px;display:flex;flex-direction:column;gap:11px}
+.ctrl-section h4{font-size:9.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-text-tertiary);margin:0 0 6px 0;font-weight:500}
+.ctrl-row{display:flex;align-items:center;font-size:11px;font-family:var(--font-mono);padding:1.5px 0;gap:6px}
+.ctrl-row .lab{color:var(--color-text-secondary);flex:1}
+.ctrl-row .val{color:var(--color-text-primary);font-weight:500}
+.ctrl-row .val.muted{color:var(--color-text-tertiary)}
+.bot{display:grid;grid-template-columns:1fr 168px;gap:12px;background:var(--color-background-secondary);border-top:0.5px solid var(--color-border-tertiary);padding:10px 12px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 10px;font-family:var(--font-mono)}
+.stat{display:flex;flex-direction:column;gap:2px;border-left:2px solid #f5b840;padding-left:8px}
+.stat.aux{border-left-color:var(--color-border-secondary)}
+.stat.ph{border-left-color:#5dcaa5}
+.stat .l{color:var(--color-text-tertiary);font-size:9px;text-transform:uppercase;letter-spacing:0.05em}
+.stat .v{font-size:12.5px;font-weight:500}
+.smith-pane{background:#0a0d12;border-radius:4px;border:0.5px solid #1a1f2a;padding:7px 8px;display:flex;flex-direction:column;gap:5px}
+.smith-pane svg{display:block;width:100%;height:auto}
+.smith-head{font-size:9.5px;color:#5fa896;font-family:var(--font-mono);letter-spacing:0.05em;display:flex;justify-content:space-between}
+.smith-head em{color:#b3c5c0;font-style:normal}
+.smith-foot{font-size:9px;color:#5fa896;font-family:var(--font-mono);display:flex;justify-content:space-between}
+</style>
+
+<div class="app">
+  <div class="titlebar">
+    <div class="appname">Circuit lab <code>lp_butter_sallenkey_4k.cir</code></div>
+    <div class="menus"><span>File</span><span>Edit</span><span>Simulate</span><span>View</span></div>
+    <button class="runbtn">▶ Sweep done</button>
+  </div>
+  <div class="tabs">
+    <div class="tab">Schematic</div>
+    <div class="tab">Scope</div>
+    <div class="tab">Spectrum</div>
+    <div class="tab active">Network analyzer</div>
+    <div class="tab">Netlist</div>
+  </div>
+
+  <div class="ws">
+    <div class="disp-pane">
+      <div class="screen">
+        <svg viewBox="0 0 600 280" preserveAspectRatio="none" style="height:280px">
+          <g stroke="#1a2230" stroke-width="0.5" fill="none">
+            <line x1="36" y1="29" x2="595" y2="29"/>
+            <line x1="36" y1="50" x2="595" y2="50"/>
+            <line x1="36" y1="71" x2="595" y2="71"/>
+            <line x1="36" y1="92" x2="595" y2="92"/>
+            <line x1="36" y1="113" x2="595" y2="113"/>
+            <line x1="176" y1="8" x2="176" y2="134"/>
+            <line x1="316" y1="8" x2="316" y2="134"/>
+            <line x1="455" y1="8" x2="455" y2="134"/>
+          </g>
+          <g stroke="#2a3548" stroke-width="0.6" fill="none">
+            <line x1="36" y1="8" x2="36" y2="134"/>
+            <line x1="595" y1="8" x2="595" y2="134"/>
+            <line x1="36" y1="8" x2="595" y2="8"/>
+            <line x1="36" y1="134" x2="595" y2="134"/>
+          </g>
+
+          <g stroke="#f5b840" stroke-width="0.6" stroke-dasharray="2 2" fill="none" opacity="0.55">
+            <line x1="36" y1="14.3" x2="595" y2="14.3"/>
+          </g>
+
+          <path id="magpath" stroke="#f5b840" stroke-width="1.5" fill="none"/>
+
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#7f8a9c" text-anchor="end">
+            <text x="33" y="11">0</text>
+            <text x="33" y="32">−10</text>
+            <text x="33" y="53">−20</text>
+            <text x="33" y="74">−30</text>
+            <text x="33" y="95">−40</text>
+            <text x="33" y="116">−50</text>
+            <text x="33" y="137">−60</text>
+          </g>
+          <text x="44" y="20" font-family="ui-monospace, Menlo, monospace" font-size="9.5" fill="#7f8a9c">|H(f)| dB · Vout/Vin · 10 dB/div</text>
+
+          <g stroke="#1a2230" stroke-width="0.5" fill="none">
+            <line x1="36" y1="171.5" x2="595" y2="171.5"/>
+            <line x1="36" y1="226.5" x2="595" y2="226.5"/>
+            <line x1="176" y1="144" x2="176" y2="254"/>
+            <line x1="316" y1="144" x2="316" y2="254"/>
+            <line x1="455" y1="144" x2="455" y2="254"/>
+          </g>
+          <g stroke="#2a3548" stroke-width="0.6" fill="none">
+            <line x1="36" y1="144" x2="36" y2="254"/>
+            <line x1="595" y1="144" x2="595" y2="254"/>
+            <line x1="36" y1="144" x2="595" y2="144"/>
+            <line x1="36" y1="254" x2="595" y2="254"/>
+            <line x1="36" y1="199" x2="595" y2="199"/>
+          </g>
+
+          <path id="phasepath" stroke="#5dcaa5" stroke-width="1.5" fill="none"/>
+
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#7f8a9c" text-anchor="end">
+            <text x="33" y="147">0°</text>
+            <text x="33" y="174">−45</text>
+            <text x="33" y="202">−90</text>
+            <text x="33" y="229">−135</text>
+            <text x="33" y="257">−180</text>
+          </g>
+          <text x="44" y="156" font-family="ui-monospace, Menlo, monospace" font-size="9.5" fill="#5dcaa5">∠H(f) · 45°/div</text>
+
+          <g font-family="ui-monospace, Menlo, monospace" font-size="9" fill="#7f8a9c" text-anchor="middle">
+            <text x="36" y="270">10 Hz</text>
+            <text x="176" y="270">100</text>
+            <text x="316" y="270">1k</text>
+            <text x="455" y="270">10k</text>
+            <text x="595" y="270">100 kHz</text>
+          </g>
+
+          <g stroke="#d4537e" stroke-width="0.7" stroke-dasharray="2 2" fill="none">
+            <line x1="399.6" y1="8" x2="399.6" y2="134"/>
+            <line x1="399.6" y1="144" x2="399.6" y2="254"/>
+          </g>
+          <g fill="#d4537e" font-family="ui-monospace, Menlo, monospace" font-size="9.5">
+            <circle cx="399.6" cy="14.3" r="2.6"/>
+            <circle cx="399.6" cy="199" r="2.6"/>
+            <text x="406" y="13">M1 fc 4.000 kHz · −3.01 dB</text>
+            <text x="406" y="155">M1 ∠ −90.0°</text>
+          </g>
+
+          <g stroke="#97c459" stroke-width="0.7" stroke-dasharray="2 2" fill="none">
+            <line x1="510.8" y1="8" x2="510.8" y2="134"/>
+          </g>
+          <g fill="#97c459" font-family="ui-monospace, Menlo, monospace" font-size="9.5">
+            <circle cx="510.8" cy="92" r="2.4"/>
+            <text x="517" y="84">M2 25.0 kHz · −40.0 dB</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="ctrl-pane">
+      <div class="ctrl-section">
+        <h4>Sweep</h4>
+        <div class="ctrl-row"><span class="lab">Type</span><span class="val">.AC</span></div>
+        <div class="ctrl-row"><span class="lab">Range</span><span class="val">10 Hz–100 kHz</span></div>
+        <div class="ctrl-row"><span class="lab">Points</span><span class="val">1001</span></div>
+        <div class="ctrl-row"><span class="lab">Spacing</span><span class="val">log</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Stimulus</h4>
+        <div class="ctrl-row"><span class="lab">Port 1</span><span class="val">V1 · 1V∠0°</span></div>
+        <div class="ctrl-row"><span class="lab">Port 2</span><span class="val">Vout</span></div>
+        <div class="ctrl-row"><span class="lab">Z₀</span><span class="val">50 Ω</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Traces</h4>
+        <div class="ctrl-row"><span class="lab">|H(f)| dB</span><span class="val">on</span></div>
+        <div class="ctrl-row"><span class="lab">∠H(f)</span><span class="val">on</span></div>
+        <div class="ctrl-row"><span class="lab">Group delay</span><span class="val muted">off</span></div>
+        <div class="ctrl-row"><span class="lab">|Z<sub>in</sub>|</span><span class="val muted">off</span></div>
+        <div class="ctrl-row"><span class="lab">S₁₁ Smith</span><span class="val">inset</span></div>
+        <div class="ctrl-row"><span class="lab">VSWR</span><span class="val muted">off</span></div>
+      </div>
+      <div class="ctrl-section">
+        <h4>Markers</h4>
+        <div class="ctrl-row"><span class="lab">M1</span><span class="val">−3 dB find</span></div>
+        <div class="ctrl-row"><span class="lab">M2</span><span class="val">−40 dB find</span></div>
+        <div class="ctrl-row"><span class="lab">M3</span><span class="val muted">off</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bot">
+    <div class="stats">
+      <div class="stat"><span class="l">−3 dB cutoff</span><span class="v">4.000 kHz</span></div>
+      <div class="stat"><span class="l">Passband gain</span><span class="v">0.00 dB</span></div>
+      <div class="stat ph"><span class="l">Phase at fc</span><span class="v">−90.0°</span></div>
+      <div class="stat"><span class="l">Filter type</span><span class="v">Butterworth</span></div>
+      <div class="stat aux"><span class="l">Q factor</span><span class="v">0.707</span></div>
+      <div class="stat aux"><span class="l">Slope at stopband</span><span class="v">−40 dB/dec</span></div>
+      <div class="stat aux"><span class="l">Group delay @DC</span><span class="v">56.3 µs</span></div>
+      <div class="stat aux"><span class="l">Step overshoot</span><span class="v">4.3 %</span></div>
+    </div>
+
+    <div class="smith-pane">
+      <div class="smith-head"><span>S₁₁ Smith</span><em>Z₀ = 50 Ω</em></div>
+      <svg viewBox="0 0 140 140" preserveAspectRatio="xMidYMid meet">
+        <g stroke="#1a2a35" stroke-width="0.4" fill="none">
+          <circle cx="70" cy="70" r="60"/>
+          <line x1="10" y1="70" x2="130" y2="70"/>
+          <circle cx="50" cy="70" r="40"/>
+          <circle cx="70" cy="70" r="30"/>
+          <circle cx="85" cy="70" r="15"/>
+          <path d="M 130 70 A 40 40 0 0 0 70 130"/>
+          <path d="M 130 70 A 40 40 0 0 1 70 10"/>
+          <path d="M 130 70 A 30 30 0 0 0 87.5 96"/>
+          <path d="M 130 70 A 30 30 0 0 1 87.5 44"/>
+        </g>
+        <g stroke="#2a4050" stroke-width="0.6" fill="none">
+          <circle cx="70" cy="70" r="60"/>
+          <line x1="10" y1="70" x2="130" y2="70"/>
+        </g>
+        <path id="smithpath" stroke="#f5b840" stroke-width="1.1" fill="none"/>
+        <circle id="smithm1" r="2.4" fill="#d4537e"/>
+        <text id="smithm1lbl" font-family="ui-monospace, Menlo, monospace" font-size="8" fill="#d4537e">M1</text>
+      </svg>
+      <div class="smith-foot"><span>10 Hz</span><span>→</span><span>100 kHz</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const Q = 1/Math.SQRT2;
+  const f0 = 4000;
+  function H(f){
+    const u = f/f0;
+    const re = 1 - u*u;
+    const im = u/Q;
+    const mag = Math.sqrt(re*re + im*im);
+    const dB = -20*Math.log10(mag);
+    const ph = -Math.atan2(im, re) * 180/Math.PI;
+    return {dB, ph};
+  }
+  function f2x(f){ return 36 + Math.log10(f/10) * 139.75; }
+  function mag2y(dB){ return 8 - dB * 2.1; }
+  function ph2y(deg){ return 144 - deg * 0.611; }
+  let mp='', pp='';
+  const N = 480;
+  for(let i=0;i<=N;i++){
+    const lf = 1 + (i/N)*4;
+    const f = Math.pow(10, lf);
+    const h = H(f);
+    const x = f2x(f);
+    const ym = mag2y(Math.max(h.dB, -62));
+    const yp = ph2y(h.ph);
+    mp += (i===0?'M':' L') + x.toFixed(1) + ' ' + ym.toFixed(1);
+    pp += (i===0?'M':' L') + x.toFixed(1) + ' ' + yp.toFixed(1);
+  }
+  document.getElementById('magpath').setAttribute('d', mp);
+  document.getElementById('phasepath').setAttribute('d', pp);
+
+  let sm = '';
+  let m1x = 70, m1y = 70;
+  const SN = 220;
+  for(let i=0;i<=SN;i++){
+    const lf = 1 + (i/SN)*4;
+    const f = Math.pow(10, lf);
+    const u = f/f0;
+    const zr = 1 + 0.05/(1 + u*u);
+    const zi = -1/(u*0.6 + 0.04) + u*0.15;
+    const dr = zr + 1, di = zi;
+    const nr = zr - 1, ni = zi;
+    const dm = dr*dr + di*di;
+    const gr = (nr*dr + ni*di)/dm;
+    const gi = (ni*dr - nr*di)/dm;
+    const sx = 70 + gr*60;
+    const sy = 70 - gi*60;
+    sm += (i===0?'M':' L') + sx.toFixed(1) + ' ' + sy.toFixed(1);
+    if(Math.abs(f - f0) < f0*0.05){ m1x = sx; m1y = sy; }
+  }
+  document.getElementById('smithpath').setAttribute('d', sm);
+  const m1 = document.getElementById('smithm1');
+  m1.setAttribute('cx', m1x.toFixed(1));
+  m1.setAttribute('cy', m1y.toFixed(1));
+  const lbl = document.getElementById('smithm1lbl');
+  lbl.setAttribute('x', (m1x + 4).toFixed(1));
+  lbl.setAttribute('y', (m1y - 4).toFixed(1));
+})();
+</script>
+
+</main>
+</body>
+</html>
