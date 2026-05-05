@@ -12,6 +12,7 @@ import Schematic from './views/schematic/Schematic.jsx';
 import Scope from './views/scope/Scope.jsx';
 import Spectrum from './views/spectrum/Spectrum.jsx';
 import Network from './views/network/Network.jsx';
+import Netlist from './views/netlist/Netlist.jsx';
 import { useCircuit, useSimulation, useSpectrum, useNetwork, useUI } from './store/index.js';
 
 const TABS = [
@@ -90,7 +91,7 @@ export default function App() {
         {activeTab === 'scope'     && <Scope />}
         {activeTab === 'spectrum'  && <Spectrum />}
         {activeTab === 'network'   && <Network />}
-        {activeTab === 'netlist'   && <Placeholder tab={activeTab} />}
+        {activeTab === 'netlist'   && <Netlist />}
       </main>
     </div>
   );

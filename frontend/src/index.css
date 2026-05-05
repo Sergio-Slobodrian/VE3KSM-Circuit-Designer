@@ -825,3 +825,273 @@ kbd {
   color: var(--text-primary);
 }
 .statusbar-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ------ Netlist tab (m8) -------------------------------------------------- */
+
+.netlist {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-tertiary);
+}
+
+.ne-workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  min-height: 0;
+}
+
+.ne-pane {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-right: 0.5px solid var(--border);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ne-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-style: italic;
+  background: var(--bg-secondary);
+}
+
+/* Editor screen — bench-instrument visual language reused from scope/spectrum */
+.ne-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-screen);
+  border: 0.5px solid #1a1f2a;
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+}
+
+.ne-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 0.5px solid #1a1f2a;
+  background: #0e1117;
+}
+
+.ne-tb-btn {
+  padding: 3px 9px;
+  border: 0.5px solid #1f2530;
+  background: transparent;
+  color: #a0a8b8;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ne-tb-btn:hover:not(:disabled) {
+  border-color: #2a3140;
+  color: #d6dce8;
+}
+.ne-tb-btn.is-primary {
+  background: #1a3a3a;
+  color: #5dcaa5;
+  border-color: #2a4a4a;
+}
+.ne-tb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ne-tb-spacer { flex: 1; }
+.ne-tb-status {
+  font-size: 10.5px;
+  color: #5fa896;
+  white-space: nowrap;
+}
+
+.ne-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  min-height: 0;
+  position: relative;
+  background: var(--bg-screen);
+  overflow: hidden;
+}
+
+/* Three layered children share the right column: overlay, textarea, plus the
+   gutter on the left. The overlay + textarea are absolutely positioned over
+   the same content rect so they can co-scroll. */
+
+.ne-gutter {
+  background: #0e1117;
+  color: #3a4250;
+  border-right: 0.5px solid #1a1f2a;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 0;
+  overflow: hidden;
+  text-align: right;
+}
+.ne-gutter-line {
+  display: block;
+  padding: 0 7px 0 4px;
+  white-space: pre;
+}
+.ne-gutter-line.is-error {
+  color: var(--accent-pink);
+  font-weight: 600;
+}
+
+/* Overlay + textarea are absolutely positioned to coincide with the right
+   column. Both have identical typography and padding so the textarea's caret
+   sits on top of the highlighted token. */
+.ne-overlay,
+.ne-input {
+  position: absolute;
+  inset: 0 0 0 40px;          /* leave room for gutter */
+  margin: 0;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow: auto;
+  border: 0;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ne-overlay {
+  color: #cfd5e0;
+  pointer-events: none;
+  user-select: none;
+}
+.ne-line { min-height: 1.6em; }
+.ne-line.is-error {
+  background: rgba(212, 83, 126, 0.10);
+  box-shadow: inset 2px 0 0 var(--accent-pink);
+}
+
+.ne-input {
+  background: transparent;
+  color: transparent;
+  caret-color: #cfd5e0;
+  resize: none;
+  /* Selection highlight ends up over the overlay; keep it readable. */
+}
+.ne-input::selection { background: rgba(93, 202, 165, 0.30); color: transparent; }
+
+/* SPICE token palette — matches mockups/04_netlist.html */
+.t-cm { color: #5a6478; }
+.t-dv { color: #d4537e; font-weight: 500; }
+.t-rf { color: #f5b840; font-weight: 500; }
+.t-nm { color: #5dcaa5; }
+.t-kw { color: #c8a8e8; }
+.t-nd { color: #8eb4f0; }
+.t-st { color: #97c459; }
+.t-pm { color: #e8a8b8; }
+.t-op { color: #7f8a9c; }
+.t-ws { color: inherit; }
+
+/* Outline panel */
+.ne-outline {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--bg-tertiary);
+  overflow: auto;
+}
+
+.ne-section h4 {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin: 0 0 6px 0;
+  font-weight: 500;
+}
+
+.ne-row {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 1.5px 0;
+  gap: 6px;
+}
+.ne-row-lab { flex: 1; color: var(--text-secondary); }
+.ne-row-val { color: var(--text-primary); font-weight: 500; }
+.ne-row-val.is-ok { color: var(--text-success); }
+
+.ne-lib-item {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 2px 0;
+  color: var(--text-success);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ne-lib-item::before { content: "⊕"; opacity: 0.7; font-size: 11px; }
+
+.ne-ana-item {
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  padding: 3px 0 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ne-ana-item.is-on  { color: var(--text-success); }
+.ne-ana-item.is-off { color: var(--text-tertiary); }
+.ne-ana-item .cmd { font-weight: 500; }
+.ne-ana-item .cmt {
+  font-size: 9.5px;
+  color: var(--text-tertiary);
+}
+
+.ne-target-select {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 6px;
+  border: 0.5px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Status line at the bottom of the tab */
+.ne-statline {
+  background: var(--bg-secondary);
+  border-top: 0.5px solid var(--border);
+  padding: 9px 12px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  font-family: var(--font-mono);
+}
+.ne-stcell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 2px solid var(--accent-teal);
+  padding-left: 8px;
+}
+.ne-stcell.is-aux { border-left-color: var(--border-strong); }
+.ne-stcell-l {
+  color: var(--text-tertiary);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ne-stcell-v {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+}

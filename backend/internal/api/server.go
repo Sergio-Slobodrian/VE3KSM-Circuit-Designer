@@ -99,6 +99,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/library", s.handleLibraryHTTP)
 	mux.HandleFunc("/api/circuit/parse", s.handleCircuitParse)
 	mux.HandleFunc("/api/circuit/emit", s.handleCircuitEmit)
+	mux.HandleFunc("/api/circuit/export", s.handleCircuitExport)
 	mux.HandleFunc("/api/examples", s.handleExamplesList)
 	mux.HandleFunc("/api/examples/", s.handleExamplesLoad)
 	mux.HandleFunc("/ws", s.handleWebSocket)
@@ -207,6 +208,43 @@ func (s *Server) handleExamplesLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, c)
+}
+
+// handleCircuitExport accepts a Circuit JSON body and returns SPICE source
+// translated for the requested dialect (`?target=ngspice|berkeley3|ltspice|
+// kicad`). Backs the Netlist tab's Export menu (DESIGN.md §10.5).
+func (s *Server) handleCircuitExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST only")
+		return
+	}
+	target := netlist.Dialect(r.URL.Query().Get("target"))
+	if target == "" {
+		target = netlist.DialectNgspice
+	}
+	known := false
+	for _, d := range netlist.Dialects {
+		if d == target {
+			known = true
+			break
+		}
+	}
+	if !known {
+		writeJSONError(w, http.StatusBadRequest, "bad_target", fmt.Sprintf("unknown export target %q", target))
+		return
+	}
+	var c circuit.Circuit
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&c); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "decode", err.Error())
+		return
+	}
+	var sb strings.Builder
+	if err := netlist.EmitDialect(&c, target, &sb); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "emit", err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = io.WriteString(w, sb.String())
 }
 
 // handleCircuitEmit accepts a Circuit JSON body and returns SPICE source.

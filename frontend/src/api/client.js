@@ -31,3 +31,59 @@ export function fetchLibrary() {
 export function fetchHealth() {
   return getJSON('/api/healthz');
 }
+
+/**
+ * Parse SPICE source server-side and return the resulting Circuit.
+ * @param {string} text raw SPICE source
+ * @returns {Promise<object>} parsed Circuit
+ */
+export async function parseNetlist(text) {
+  const resp = await fetch('/api/circuit/parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain', Accept: 'application/json' },
+    body: text,
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(body || `${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
+ * Emit canonical ngspice source for the given Circuit.
+ * @param {object} circuit
+ * @returns {Promise<string>} SPICE source
+ */
+export async function emitNetlist(circuit) {
+  const resp = await fetch('/api/circuit/emit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/plain' },
+    body: JSON.stringify(circuit),
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(body || `${resp.status} ${resp.statusText}`);
+  }
+  return resp.text();
+}
+
+/**
+ * Emit SPICE source translated for a target dialect (ngspice|berkeley3|
+ * ltspice|kicad). DESIGN.md §10.5.
+ * @param {object} circuit
+ * @param {string} target
+ * @returns {Promise<string>} SPICE source
+ */
+export async function exportNetlist(circuit, target) {
+  const resp = await fetch(`/api/circuit/export?target=${encodeURIComponent(target)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/plain' },
+    body: JSON.stringify(circuit),
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(body || `${resp.status} ${resp.statusText}`);
+  }
+  return resp.text();
+}
