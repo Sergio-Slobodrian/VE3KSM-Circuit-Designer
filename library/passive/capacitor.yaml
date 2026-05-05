@@ -1,0 +1,12 @@
+kind: capacitor
+ref_prefix: C
+symbol: C
+group: Passive
+description: Linear capacitor
+node_count: 2
+node_names: [a, b]
+default_value: 10n
+symbol_svg: |
+  <path d="M0 5 H9 M9 1 V9 M13 1 V9 M13 5 H22"/>
+inspector_fields:
+  - { name: value, label: Capacitance, unit: F, type: spice_value, default: 10n }

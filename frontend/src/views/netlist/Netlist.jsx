@@ -16,10 +16,11 @@
 //      discarding any pending text edits.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useCircuit } from '../../store/index.js';
+import { useCircuit, useUI } from '../../store/index.js';
 import { emitNetlist, parseNetlist, exportNetlist } from '../../api/client.js';
 import NetlistEditor from './NetlistEditor.jsx';
 import NetlistOutline from './NetlistOutline.jsx';
+import Splitter from '../common/Splitter.jsx';
 
 const DEBOUNCE_MS = 350;
 
@@ -28,6 +29,8 @@ export default function Netlist() {
   const status = useCircuit((s) => s.status);
   const sourceName = useCircuit((s) => s.sourceName);
   const replaceCircuit = useCircuit((s) => s.replaceCircuit);
+  const controlPanelWidth = useUI((s) => s.controlPanelWidth);
+  const setControlPanelWidth = useUI((s) => s.setControlPanelWidth);
 
   const [text, setText] = useState('');
   const [target, setTarget] = useState('ngspice');
@@ -204,7 +207,7 @@ export default function Netlist() {
 
   return (
     <div className="netlist">
-      <div className="ne-workspace">
+      <div className="ne-workspace" style={{ '--ctrl-width': `${controlPanelWidth}px` }}>
         <div className="ne-pane">
           <NetlistEditor
             text={text}
@@ -214,6 +217,7 @@ export default function Netlist() {
             toolbar={toolbar}
           />
         </div>
+        <Splitter width={controlPanelWidth} onChange={setControlPanelWidth} />
         <NetlistOutline
           circuit={circuit}
           sync={sync}

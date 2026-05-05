@@ -167,6 +167,27 @@ export default function SpectrumControls() {
             style={{ width: 80 }}
           />
         </Row>
+        <Row label="harmonics">
+          <input
+            type="number"
+            min={2}
+            max={40}
+            value={config.harmonics}
+            onChange={(ev) => setConfig({ harmonics: Math.max(2, Math.min(40, Number(ev.target.value) || 10)) })}
+            className="ch-coupling"
+            style={{ width: 60 }}
+          />
+        </Row>
+        <Row label="track">
+          <button
+            type="button"
+            className={`ch-invert ${config.trackHarmonics ? 'is-on' : ''}`}
+            onClick={() => setConfig({ trackHarmonics: !config.trackHarmonics })}
+            title="Overlay markers at every harmonic of f₀"
+          >
+            {config.trackHarmonics ? 'on' : 'off'}
+          </button>
+        </Row>
       </div>
     </div>
   );

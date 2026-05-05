@@ -1,6 +1,9 @@
 // Per-channel measurement readouts under the scope screen. The bar shows the
 // six measurements DESIGN.md §6.2 calls out (Vpp, Vrms, mean, freq, period,
 // phase) for each enabled channel; phase is relative to CH1.
+//
+// Math channels (m11) reuse the same measurement set; only the block label
+// differs (Mn instead of CHn).
 
 import { formatEng } from '../../lib/measurements.js';
 
@@ -11,15 +14,25 @@ import { formatEng } from '../../lib/measurements.js';
  *     frequency: number, period: number, phaseDeg: number,
  *     channel: { id: string, label: string, color: string }
  *   }>,
+ *   mathDerived?: Array<{
+ *     channel: { id: string, label: string, color: string, enabled: boolean },
+ *     error: string | null,
+ *     ys: ArrayLike<number>,
+ *     vpp?: number, vrms?: number, mean?: number,
+ *     frequency?: number, period?: number, phaseDeg?: number,
+ *   }>,
  *   cursor?: null | {
  *     time: number,
  *     channels: Array<{ label: string, color: string, voltage: number }>,
  *   },
  * }} props
  */
-export default function MeasurementBar({ derived, cursor }) {
+export default function MeasurementBar({ derived, mathDerived = [], cursor }) {
   const visible = derived.filter((d) => d != null);
-  if (visible.length === 0) {
+  const visibleMath = mathDerived.filter(
+    (d) => d && d.channel.enabled && !d.error && d.ys && d.ys.length > 0,
+  );
+  if (visible.length === 0 && visibleMath.length === 0) {
     return (
       <div className="scope-meas-bar empty">
         Run an analysis to populate measurements.
@@ -30,6 +43,9 @@ export default function MeasurementBar({ derived, cursor }) {
     <div className="scope-meas-bar">
       <CursorBlock cursor={cursor} />
       {visible.map((d) => (
+        <ChannelBlock key={d.channel.id} d={d} />
+      ))}
+      {visibleMath.map((d) => (
         <ChannelBlock key={d.channel.id} d={d} />
       ))}
     </div>

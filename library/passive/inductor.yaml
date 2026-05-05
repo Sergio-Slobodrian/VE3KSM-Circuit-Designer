@@ -1,0 +1,12 @@
+kind: inductor
+ref_prefix: L
+symbol: L
+group: Passive
+description: Linear inductor
+node_count: 2
+node_names: [a, b]
+default_value: 1m
+symbol_svg: |
+  <path d="M0 5 H3 a2.5 2.5 0 0 1 4 0 a2.5 2.5 0 0 1 4 0 a2.5 2.5 0 0 1 4 0 a2.5 2.5 0 0 1 4 0 H22"/>
+inspector_fields:
+  - { name: value, label: Inductance, unit: H, type: spice_value, default: 1m }

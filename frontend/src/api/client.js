@@ -69,6 +69,61 @@ export async function emitNetlist(circuit) {
 }
 
 /**
+ * Ingest a SPICE .lib body (m9). The server scans for .SUBCKT definitions,
+ * persists the file in its library search dir, and returns the freshly-created
+ * palette entries plus the canonical (sanitised) basename.
+ * @param {string} filename
+ * @param {string} body raw .lib source
+ * @returns {Promise<{lib_file: string, imported: object[]}>}
+ */
+export async function importLibrary(filename, body) {
+  const resp = await fetch('/api/library/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ filename, body }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    let msg = text;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.message) msg = parsed.message;
+    } catch { /* not json — keep raw */ }
+    throw new Error(msg || `${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
+ * Decode a CSV or WAV file server-side and return the resulting (t,v) point
+ * list pre-formatted as the canonical `t:v;t:v;…` string the SourceSpec
+ * stores in Params["points"]. Used by the m10 signal generator's
+ * "Import waveform…" affordance for the PWL/arb mode.
+ *
+ * @param {File} file the user-picked file (from <input type="file">)
+ * @param {{peak?: number, sampleRateHint?: number}} [opts]
+ * @returns {Promise<{name: string, sample_rate: number, duration: number,
+ *   point_count: number, points: number[], points_string: string}>}
+ */
+export async function importWaveform(file, opts = {}) {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  if (opts.peak != null) fd.append('peak', String(opts.peak));
+  if (opts.sampleRateHint != null) fd.append('sample_rate', String(opts.sampleRateHint));
+  const resp = await fetch('/api/waveform/import', { method: 'POST', body: fd });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    let msg = text;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.message) msg = parsed.message;
+    } catch { /* not json */ }
+    throw new Error(msg || `${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
  * Emit SPICE source translated for a target dialect (ngspice|berkeley3|
  * ltspice|kicad). DESIGN.md §10.5.
  * @param {object} circuit

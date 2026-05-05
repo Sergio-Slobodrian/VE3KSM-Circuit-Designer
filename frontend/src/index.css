@@ -195,6 +195,38 @@ button { font-family: inherit; }
   border-top: 0.5px solid var(--border);
 }
 
+.palgroup--actions { margin-top: 14px; }
+
+.palette-import {
+  display: block;
+  width: calc(100% - 12px);
+  margin: 2px 6px 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 0.5px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.palette-import:hover { background: var(--bg-tertiary, #efeae0); }
+
+.palette-import-status {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  margin: 2px 6px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+.palette-import-status--ok    { color: var(--text-success, #2a6b2a); background: rgba(70, 130, 70, 0.08); }
+.palette-import-status--error { color: var(--text-error, #a23a2a); background: rgba(170, 50, 50, 0.08); }
+.palette-import-status--busy  { color: var(--text-secondary); background: rgba(0, 0, 0, 0.04); }
+
 /* Canvas ---------------------------- */
 
 .canvas {
@@ -392,6 +424,35 @@ button { font-family: inherit; }
 }
 .insp-multilink:hover { border-color: var(--selection-color); color: var(--selection-color); }
 
+.insp-probes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+.insp-probes-label {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin-right: 2px;
+}
+.insp-probe-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.insp-probe-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.insp-probe-btn.is-probed {
+  border-color: var(--probe-color);
+  background: var(--bg-info);
+  color: var(--text-info);
+}
+
 kbd {
   display: inline-block;
   font-family: var(--font-mono);
@@ -415,7 +476,9 @@ kbd {
 .scope-workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 240px;
+  /* `--ctrl-width` is set inline from useUI.controlPanelWidth and adjusted
+     by the Splitter handle. The 6px middle column is the splitter itself. */
+  grid-template-columns: 1fr 6px var(--ctrl-width, 280px);
   min-height: 0;
 }
 
@@ -488,7 +551,52 @@ kbd {
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
+  /* Min-width 0 lets the grid track honour the user-chosen width without
+     min-content from the inner controls (e.g. the math expression input)
+     forcing the column wider than --ctrl-width. */
+  min-width: 0;
 }
+
+/* Vertical splitter handle between the screen pane and the side panel.
+   Sits in its own 6px grid track; the visible bar is 1px so it reads as a
+   border but the full 6px stays clickable. */
+.splitter-v {
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  border-left:  0.5px solid var(--border);
+  border-right: 0.5px solid var(--border);
+  position: relative;
+  user-select: none;
+  touch-action: none;
+}
+.splitter-v:hover,
+.splitter-v:active {
+  background: var(--bg-info, rgba(120, 160, 220, 0.18));
+  border-color: var(--border-strong);
+}
+/* Centre dot triplet so the handle is discoverable without a hover. */
+.splitter-v::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 22px;
+  margin-top: -11px;
+  margin-left: -1px;
+  background:
+    linear-gradient(to bottom,
+      var(--text-tertiary) 0, var(--text-tertiary) 2px,
+      transparent 2px, transparent 6px,
+      var(--text-tertiary) 6px, var(--text-tertiary) 8px,
+      transparent 8px, transparent 12px,
+      var(--text-tertiary) 12px, var(--text-tertiary) 14px,
+      transparent 14px);
+  opacity: 0.5;
+}
+.splitter-v:hover::before { opacity: 1; }
 
 .scope-runbar {
   display: flex;
@@ -706,6 +814,83 @@ kbd {
 }
 .meas-cursor .meas-head { color: var(--text-secondary); }
 
+/* Math channel rows in the side panel: text input for the expression
+   replaces the channel <select>; the per-channel error message renders
+   in the danger colour beneath the row when the expression fails to
+   compile. */
+.scope-math-help {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-tertiary);
+  padding: 0 0 4px;
+  gap: 1px;
+}
+.scope-math-help code {
+  font-family: inherit;
+  background: var(--bg-tertiary);
+  padding: 0 3px;
+  border-radius: 2px;
+}
+.ch-math-expr {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+.scope-math-err {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-danger);
+  margin-left: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Spectrum readout: when the harmonic table is rendered the bar splits
+   into two rows — the standard meas-block strip on top, then a tabular
+   row below it. The wrapper is flex-column so the harmonic table sits
+   under the strip rather than wrapping to its right. */
+.scope-meas-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.scope-meas-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.harmonic-table {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border-top: 0.5px solid var(--border);
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-x: auto;
+}
+.harmonic-row {
+  display: grid;
+  grid-template-columns: 36px 80px 80px 80px 70px 60px;
+  column-gap: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  padding: 1px 0;
+}
+.harmonic-row > span:first-child { color: var(--text-secondary); font-weight: 500; }
+.harmonic-head {
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  border-bottom: 0.5px solid var(--border);
+  padding-bottom: 2px;
+}
+.harmonic-head > span { color: var(--text-tertiary) !important; }
+
 /* ------ Spectrum + Network tabs ------------------------------------------- */
 
 /* Reuse the scope layout shell for the analysis tabs. The grid + screen +
@@ -725,7 +910,7 @@ kbd {
 .spectrum-workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 240px;
+  grid-template-columns: 1fr 6px var(--ctrl-width, 280px);
   min-height: 0;
 }
 
@@ -838,7 +1023,7 @@ kbd {
 .ne-workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 240px;
+  grid-template-columns: 1fr 6px var(--ctrl-width, 280px);
   min-height: 0;
 }
 
@@ -1095,3 +1280,148 @@ kbd {
   font-size: 12px;
   font-weight: 500;
 }
+
+/* ------ Signal generator panel (m10) -------------------------------------
+   The inspector mounts <SignalGenerator /> below the standard fields whenever
+   a V/I source is selected. Layout mirrors mockups/01_schematic_editor.html:
+   wave-button row → params + preview split → optional .csv/.wav importer.   */
+
+.siggen {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--border);
+}
+.siggen-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 11px;
+}
+.siggen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-family: inherit;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.siggen-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.siggen-btn.is-active {
+  border-color: var(--selection-color);
+  background: var(--bg-info);
+  color: var(--text-info);
+}
+.siggen-btn svg { flex-shrink: 0; }
+
+.siggen-split {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 720px) {
+  .siggen-split { grid-template-columns: 1fr; }
+}
+
+.siggen-params {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 8px 12px;
+}
+.siggen-param {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.siggen-param-label {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+.siggen-param-input {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-primary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.siggen-param-text,
+.siggen-param-select {
+  flex: 1;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 0 8px;
+  min-width: 0;
+}
+.siggen-param-unit {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border-left: 0.5px solid var(--border);
+  padding: 0 8px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.siggen-param-text:read-only {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+.siggen-preview {
+  background: #0a0d12;
+  border-radius: 6px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: fit-content;
+}
+.siggen-preview svg { display: block; width: 100%; height: 70px; }
+.siggen-preview-head,
+.siggen-preview-foot {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  color: #5fa896;
+}
+.siggen-preview-head { font-size: 10.5px; letter-spacing: 0.04em; }
+.siggen-preview-head em { color: #b3c5c0; font-style: normal; }
+.siggen-preview-foot { font-size: 9.5px; }
+
+.siggen-import {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.siggen-import-btn {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  border: 0.5px solid var(--border-strong);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.siggen-import-btn:hover { border-color: var(--selection-color); color: var(--text-info); }
+.siggen-import-status {
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+.siggen-import-status--busy  { color: var(--text-tertiary); }
+.siggen-import-status--ok    { color: var(--text-success); }
+.siggen-import-status--error { color: var(--text-danger); }

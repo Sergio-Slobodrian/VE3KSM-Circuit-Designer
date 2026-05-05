@@ -1,0 +1,54 @@
+kind: subcircuit
+ref_prefix: X
+symbol: X
+description: Triode model from tubes_koren.lib
+group: Tubes
+node_count: 3
+node_names:
+    - P
+    - G
+    - K
+symbol_svg: <circle cx="11" cy="8" r="6" fill="none"/><path d="M11 2 V0 M7 5 H15 M11 14 V16"/><path d="M5 8 H17" stroke-dasharray="1.5 1.2"/>
+library: tubes_koren.lib
+model_name: 12AX7
+inspector_fields:
+    - name: model
+      label: Model
+      type: text
+      default: 12AX7
+    - name: mu
+      label: MU
+      type: text
+      default: "100"
+    - name: ex
+      label: EX
+      type: text
+      default: "1.4"
+    - name: kg1
+      label: KG1
+      type: text
+      default: "600"
+    - name: kp
+      label: KP
+      type: text
+      default: "600"
+    - name: kvb
+      label: KVB
+      type: text
+      default: "300"
+    - name: rgi
+      label: RGI
+      type: text
+      default: "2000"
+    - name: ccg
+      label: CCG
+      type: text
+      default: 2.3P
+    - name: cgp
+      label: CGP
+      type: text
+      default: 2.4P
+    - name: ccp
+      label: CCP
+      type: text
+      default: 0.9P

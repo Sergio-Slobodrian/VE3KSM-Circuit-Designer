@@ -138,7 +138,10 @@ func TestFixtureContents(t *testing.T) {
 	if v1.Source == nil || v1.Source.Mode != "sin" {
 		t.Errorf("V1.Source: got %+v, want Mode=sin", v1.Source)
 	} else {
-		want := map[string]string{"offset": "0", "ampl": "0.25", "freq": "1k"}
+		// V1's source emits SIN(0 0.25 1k) in the fixture; Params storage is
+		// Vpp (m10 convention) so 0.25 V peak round-trips as 0.5 Vpp in memory
+		// — matches the fixture comment "; sine 1 kHz, 500 mVpp".
+		want := map[string]string{"offset": "0", "ampl": "0.5", "freq": "1k"}
 		if !reflect.DeepEqual(v1.Source.Params, want) {
 			t.Errorf("V1.Source.Params: got %+v, want %+v", v1.Source.Params, want)
 		}

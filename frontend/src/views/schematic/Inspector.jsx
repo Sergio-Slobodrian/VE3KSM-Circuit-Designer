@@ -4,13 +4,14 @@
 // selection, not just the primary, so multi-select operations have a
 // mouse-driven affordance for users who don't reach for keyboard shortcuts.
 //
-// Source-mode editing (the "signal generator" panel from DESIGN.md §6.1) is
-// still deferred to milestone 10; for now V/I sources expose the raw
-// `value` string + the read-only AC stim summary so the parser round-trip
-// is visible at least.
+// Milestone 10: V/I sources now expose the full 11-waveform signal generator
+// panel via <SignalGenerator/>. The raw `value` text input is gone for those
+// kinds; everything that used to live in `value` (the SPICE source spec
+// shorthand) now flows through SourceSpec.Mode + Params.
 
 import { useEffect, useState } from 'react';
 import { useCircuit, useSelection } from '../../store/index.js';
+import SignalGenerator from './SignalGenerator.jsx';
 
 const KIND_LABEL = {
   resistor: 'Resistor',
@@ -27,6 +28,8 @@ export default function Inspector() {
   const rotateComponents = useCircuit((s) => s.rotateComponents);
   const mirrorComponents = useCircuit((s) => s.mirrorComponents);
   const deleteComponents = useCircuit((s) => s.deleteComponents);
+  const addProbe = useCircuit((s) => s.addProbe);
+  const removeProbe = useCircuit((s) => s.removeProbe);
   const selectedRefs = useSelection((s) => s.selectedRefs);
   const clearSel = useSelection((s) => s.clear);
   const setSelection = useSelection((s) => s.setSelection);
@@ -102,6 +105,13 @@ export default function Inspector() {
         onDelete={() => { deleteComponents([comp.ref]); clearSel(); }}
       />
 
+      <ProbeRow
+        comp={comp}
+        probes={circuit?.probes || []}
+        onAdd={(node) => addProbe(node, 'voltage')}
+        onRemove={(node) => removeProbe(node)}
+      />
+
       <dl className="insp-fields">
         <Field name="Ref">
           <TextInput
@@ -126,17 +136,6 @@ export default function Inspector() {
           </Field>
         )}
 
-        {(comp.kind === 'voltage_source' || comp.kind === 'current_source') && (
-          <Field name="Value">
-            <TextInput
-              value={comp.value || ''}
-              placeholder="DC 1, SIN(0 1 1k), …"
-              onCommit={(next) => updateComponent(comp.ref, { value: next })}
-              mono
-            />
-          </Field>
-        )}
-
         {comp.kind === 'subcircuit' && (
           <Field name="Model">
             <TextInput
@@ -148,11 +147,10 @@ export default function Inspector() {
           </Field>
         )}
 
-        {comp.source?.mode && <ReadOnlyField name="Source mode" value={comp.source.mode.toUpperCase()} />}
-        {comp.source?.params && Object.entries(comp.source.params).map(([k, v]) => (
-          <ReadOnlyField key={k} name={k} value={v} />
-        ))}
-        {comp.source?.ac && (
+        {/* Non-source components still get a read-only source/params summary */}
+        {(comp.kind !== 'voltage_source' && comp.kind !== 'current_source') && comp.source?.mode &&
+          <ReadOnlyField name="Source mode" value={comp.source.mode.toUpperCase()} />}
+        {(comp.kind !== 'voltage_source' && comp.kind !== 'current_source') && comp.source?.ac && (
           <ReadOnlyField name="AC stim" value={`${comp.source.ac.magnitude || '1'} ∠ ${comp.source.ac.phase || '0'}°`} />
         )}
 
@@ -163,6 +161,40 @@ export default function Inspector() {
           <ReadOnlyField key={`p-${k}`} name={k} value={v} />
         ))}
       </dl>
+
+      {(comp.kind === 'voltage_source' || comp.kind === 'current_source') && (
+        <SignalGenerator comp={comp} />
+      )}
+    </div>
+  );
+}
+
+// ProbeRow lists each non-ground node on the selected component with a
+// single-button toggle: + probe when unprobed, ✓ probe when already covered.
+// Single-node components (R/C/L between two pins) get one row per terminal so
+// the user can probe either side; for V/I sources the positive terminal is
+// what the auto-attach in addComponent chose, but the user can probe either.
+function ProbeRow({ comp, probes, onAdd, onRemove }) {
+  const nodes = (comp.nodes || []).filter((n) => n && n !== '0');
+  if (nodes.length === 0) return null;
+  const probedSet = new Set(probes.filter((p) => p.kind === 'voltage').map((p) => p.node));
+  return (
+    <div className="insp-probes" role="group" aria-label="Probes">
+      <span className="insp-probes-label">Probe</span>
+      {nodes.map((node) => {
+        const probed = probedSet.has(node);
+        return (
+          <button
+            key={node}
+            type="button"
+            className={`insp-probe-btn${probed ? ' is-probed' : ''}`}
+            onClick={() => probed ? onRemove(node) : onAdd(node)}
+            title={probed ? `Remove probe at ${node}` : `Add voltage probe at ${node}`}
+          >
+            {probed ? '✓' : '+'} {node}
+          </button>
+        );
+      })}
     </div>
   );
 }

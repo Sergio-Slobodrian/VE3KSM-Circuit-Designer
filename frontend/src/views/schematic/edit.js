@@ -107,11 +107,16 @@ export function pinCount(kind) {
  * Build a fresh Component, ready to splice into Circuit.components. Assigns
  * a unique ref + fresh per-pin node names, snaps the position to the grid,
  * and merges the kind-specific defaults.
+ *
+ * `manifest`, when supplied, is the LibraryComponent the user dragged from
+ * the palette. We honour its node_count and model_name so tubes (kind=
+ * subcircuit, model=12AX7) and other model-bearing subcircuits instantiate
+ * with the right pin count and the right .SUBCKT name attached.
  */
-export function newComponent(circuit, kind, x, y) {
+export function newComponent(circuit, kind, x, y, manifest = null) {
   const base = defaultsForKind(kind);
   const ref = nextRef(circuit, kind);
-  const pins = pinCount(kind);
+  const pins = manifest?.node_count ?? pinCount(kind);
   const used = new Set();
   for (const c of circuit?.components || []) for (const n of c.nodes || []) if (n) used.add(n);
   const nodes = [];
@@ -123,12 +128,19 @@ export function newComponent(circuit, kind, x, y) {
     }
     nodes.push(n);
   }
-  return {
+  const out = {
     ...base,
     ref,
     nodes,
     layout: { ...base.layout, x: snap(x), y: snap(y) },
   };
+  if (manifest?.model_name) {
+    out.model = manifest.model_name;
+  }
+  if (manifest?.default_value) {
+    out.value = manifest.default_value;
+  }
+  return out;
 }
 
 /**

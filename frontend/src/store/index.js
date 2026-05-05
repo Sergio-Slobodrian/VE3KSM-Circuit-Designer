@@ -3,7 +3,7 @@
 // over the WebSocket protocol.
 
 import { create } from 'zustand';
-import { fetchExample, fetchExamples, fetchLibrary, fetchHealth } from '../api/client.js';
+import { fetchExample, fetchExamples, fetchLibrary, fetchHealth, importLibrary as apiImportLibrary } from '../api/client.js';
 import { openSocket, nextEnvelopeID, runAnalysisStream } from '../api/ws.js';
 import { autoVDiv, autoTimeDiv } from '../lib/measurements.js';
 import {
@@ -185,13 +185,71 @@ export const useCircuit = create((set, get) => {
      * Append a fresh component centred at the snapped (x, y). Returns the
      * generated ref. The new component starts with auto-named per-pin nodes
      * the user wires up via Canvas pin-clicks.
+     *
+     * `spec.manifest`, when supplied (m9 palette drop), carries node_count,
+     * model_name, and a library file reference; tube/subcircuit drops use
+     * those to pin the right model and add a `.LIB` include if missing.
+     *
+     * V/I sources auto-attach a voltage probe at their positive (nodes[0])
+     * terminal. Without this, a freshly-dropped Signal source has nothing the
+     * Scope tab can bind a channel to — and there is currently no other UI
+     * affordance to add a probe from the schematic. The probe shows up in
+     * the next sim run's auto-channel-binding (useSimulation.run, channel
+     * defaulting), so a click of "Run sim" gives the user a visible trace.
      */
     addComponent(spec) {
       const cur = get().circuit;
       if (!cur) return null;
-      const fresh = newComponent(cur, spec.kind, spec.x ?? 0, spec.y ?? 0);
-      edit((c) => ({ ...c, components: (c.components || []).concat([fresh]) }));
+      const fresh = newComponent(cur, spec.kind, spec.x ?? 0, spec.y ?? 0, spec.manifest);
+      const libRef = spec.manifest?.library;
+      const isSource = fresh.kind === 'voltage_source' || fresh.kind === 'current_source';
+      const probeNode = isSource ? fresh.nodes?.[0] : null;
+      edit((c) => {
+        const next = { ...c, components: (c.components || []).concat([fresh]) };
+        if (libRef && !(c.libraries || []).some((l) => l.path === libRef)) {
+          next.libraries = (c.libraries || []).concat([{ path: libRef }]);
+        }
+        if (probeNode && probeNode !== '0' && !(c.probes || []).some((p) => p.node === probeNode)) {
+          next.probes = (c.probes || []).concat([{
+            name: probeNode, node: probeNode, kind: 'voltage', layout: { x: 0, y: 0, rot: 0, mirror: false },
+          }]);
+        }
+        return next;
+      });
       return fresh.ref;
+    },
+
+    /**
+     * Add a probe at `node` if not already present. `kind` is "voltage" or
+     * "current" (the latter expects `node` to be a component ref, since
+     * ngspice's `I(...)` operates on devices not nodes). No-op when `node`
+     * is empty or "0" (ground is not a useful probe target).
+     */
+    addProbe(node, kind = 'voltage', name) {
+      if (!node || node === '0') return null;
+      return edit((c) => {
+        if ((c.probes || []).some((p) => p.node === node && p.kind === kind)) return c;
+        const probe = {
+          name: name || node, node, kind,
+          layout: { x: 0, y: 0, rot: 0, mirror: false },
+        };
+        return { ...c, probes: (c.probes || []).concat([probe]) };
+      });
+    },
+
+    /**
+     * Remove every probe whose node matches `node`. The Inspector's probe
+     * toggle calls this to undo a prior addProbe; the deleteComponents path
+     * deliberately does NOT call it (a probed node may exist on other
+     * components).
+     */
+    removeProbe(node) {
+      if (!node) return null;
+      return edit((c) => {
+        const next = (c.probes || []).filter((p) => p.node !== node);
+        if (next.length === (c.probes || []).length) return c;
+        return { ...c, probes: next };
+      });
     },
 
     /**
@@ -305,6 +363,7 @@ export const useSelection = create((set, get) => ({
  * picks a probe in the Channels panel.
  */
 const SCOPE_CHANNEL_COLORS = ['#f5b840', '#5dcaa5', '#d4537e', '#97c459'];
+const MATH_CHANNEL_COLORS  = ['#7fb3ff', '#cf86e3'];
 
 function makeChannel(idx, probeNode = null) {
   return {
@@ -317,6 +376,30 @@ function makeChannel(idx, probeNode = null) {
     invert: false,
     vDiv: idx === 0 ? 0.2 : 1,  // volts per division
     position: 0,                 // vertical offset, in divisions
+  };
+}
+
+/**
+ * Math channels are user-defined client-side derivations of the raw scope
+ * channels — DESIGN.md §6.2 lists "ratio, difference, product, integral,
+ * derivative — JS expression box that evaluates over the channel data".
+ *
+ * Each math channel carries an `expr` string the user types in the side panel
+ * (e.g. `CH1 - CH2`, `INT(CH1)`). The evaluation happens in Scope.jsx via
+ * compileMathExpression / evaluateMathChannel; the store just owns the
+ * persistent display state.
+ */
+function makeMathChannel(idx) {
+  return {
+    id: `m${idx + 1}`,
+    label: `M${idx + 1}`,
+    color: MATH_CHANNEL_COLORS[idx % MATH_CHANNEL_COLORS.length],
+    enabled: false,
+    expr: '',
+    coupling: 'dc',             // 'dc' | 'ac' | 'gnd' — same semantics as a physical channel
+    invert: false,
+    vDiv: 1,
+    position: 0,
   };
 }
 
@@ -358,6 +441,7 @@ export const useSimulation = create((set, get) => {
     runID: null,
     analysis: null,
     channels: [makeChannel(0), makeChannel(1), makeChannel(2), makeChannel(3)],
+    mathChannels: [makeMathChannel(0), makeMathChannel(1)],
     timebase: { perDiv: 5e-4, position: 0 },   // s/div, s offset
     // True when the next successful run should auto-fit V/div + position +
     // time/div from the captured data. Set on circuit change, cleared after
@@ -500,6 +584,13 @@ export const useSimulation = create((set, get) => {
     setChannel(index, patch) {
       set((s) => ({
         channels: s.channels.map((ch, i) => (i === index ? { ...ch, ...patch } : ch)),
+      }));
+    },
+
+    /** Edit one math channel's display state (expr / enabled / vDiv / etc.). */
+    setMathChannel(index, patch) {
+      set((s) => ({
+        mathChannels: s.mathChannels.map((m, i) => (i === index ? { ...m, ...patch } : m)),
       }));
     },
 
@@ -672,6 +763,8 @@ export const useSpectrum = create((set, get) => {
       probe: null,           // selected probe to feature; null = first available
       markers: { m1: null, m2: null }, // marker frequencies in Hz, null = unset
       f0: 1000,              // fundamental for THD/SINAD (Hz)
+      harmonics: 10,         // number of harmonics included in THD sum (2..N)
+      trackHarmonics: false, // overlay markers on every harmonic of f0
     },
 
     setConfig(patch) {
@@ -779,7 +872,10 @@ export const useNetwork = create((set, get) => {
       stopHz: 100000,
       probeOut: null,        // probe at port 2 (frontend display only)
       groupDelay: false,     // overlay -dφ/dω on the magnitude plot
-      autoMarkers: { minus3dB: true, peak: true, unityGain: true, phaseMargin: true },
+      autoMarkers: {
+        minus3dB: true, peak: true, unityGain: true, phaseMargin: true,
+        minus40dB: false, gainMargin: true,
+      },
     },
 
     setConfig(patch) {
@@ -844,6 +940,10 @@ export const useUI = create((set) => ({
   // than a fixed value. Persisted in localStorage so opening the app again
   // restores the chosen brightness.
   gridBrightness: loadUIPref('gridBrightness', 70),
+  // Width (px) of the right-hand control / outline panel on the analysis
+  // and netlist tabs. User-resizable via the Splitter handle between the
+  // screen pane and the panel; persisted so a wider panel survives reload.
+  controlPanelWidth: loadUIPref('controlPanelWidth', 280),
 
   setTab(id) { set({ activeTab: id }); },
 
@@ -851,6 +951,12 @@ export const useUI = create((set) => ({
     const clamped = Math.max(0, Math.min(100, v));
     set({ gridBrightness: clamped });
     saveUIPref('gridBrightness', clamped);
+  },
+
+  setControlPanelWidth(v) {
+    const clamped = Math.max(200, Math.min(600, Math.round(v)));
+    set({ controlPanelWidth: clamped });
+    saveUIPref('controlPanelWidth', clamped);
   },
 
   async pingBackend() {
@@ -869,5 +975,23 @@ export const useUI = create((set) => ({
     } catch {
       set({ library: [] });
     }
+  },
+
+  /**
+   * Import a SPICE .lib file via /api/library/import. On success, refreshes
+   * the palette so newly-discovered subcircuits appear immediately. Returns
+   * the import result (filename + imported components) so the caller can
+   * surface a confirmation toast.
+   */
+  async importLibrary(filename, body) {
+    const res = await apiImportLibrary(filename, body);
+    try {
+      const { components } = await fetchLibrary();
+      set({ library: components || [] });
+    } catch {
+      // Non-fatal: import succeeded but refresh failed. Keep the prior list
+      // so the user does not see an empty palette flash.
+    }
+    return res;
   },
 }));

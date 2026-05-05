@@ -1,0 +1,12 @@
+kind: voltage_source
+ref_prefix: V
+symbol: V
+group: Sources
+description: Independent voltage source (DC, SIN, PULSE, AC, ...)
+node_count: 2
+node_names: [pos, neg]
+symbol_svg: |
+  <circle cx="11" cy="7" r="5" fill="none"/>
+  <path d="M7 7 q2 -3 4 0 t4 0"/>
+inspector_fields:
+  - { name: source, label: Waveform, type: source_spec }

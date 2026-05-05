@@ -122,27 +122,60 @@ type SimDonePayload struct {
 }
 
 // LibraryListPayload is sent both as a request (empty body) and as a response
-// (Components populated). Filter is unused in milestone 3 but reserved.
+// (Components populated). Filter narrows the listing client-side equivalent of
+// substring search across kind/symbol/description/model.
 type LibraryListPayload struct {
 	Filter     string             `json:"filter,omitempty"`
 	Components []LibraryComponent `json:"components,omitempty"`
 }
 
 // LibraryImportPayload submits a SPICE .lib file body for ingestion. The
-// milestone-9 implementation will parse .SUBCKT statements; milestone 3 only
-// validates that the request is well-formed and returns a stub.
+// server scans for .SUBCKT definitions, writes the raw .lib to its library
+// search directory so ngspice can resolve `.LIB` references, and creates one
+// YAML stub per subcircuit. The freshly-discovered components are returned in
+// LibraryImportResultPayload for immediate palette refresh.
 type LibraryImportPayload struct {
 	Filename string `json:"filename"`
 	Body     string `json:"body"`
 }
 
-// LibraryComponent is one entry in a library listing. The shape is the
-// minimum the frontend palette needs (DESIGN.md §8); milestone 9 will extend
-// it with model parameters and footprint hints.
+// LibraryImportResultPayload is the response form of an OpLibraryImport
+// request. LibFile is the basename the server stored the .lib under (also
+// what the client should add to Circuit.Libraries when instantiating one of
+// the imported subcircuits). Imported is the freshly-discovered palette
+// entries — a subset of what the next library.list call will return.
+type LibraryImportResultPayload struct {
+	LibFile  string             `json:"lib_file"`
+	Imported []LibraryComponent `json:"imported"`
+}
+
+// LibraryComponent is one entry in a library listing. The shape mirrors the
+// YAML manifest schema in DESIGN.md §8; the frontend uses Kind + Group +
+// SymbolSVG + InspectorFields to render the palette and inspector dynamically.
 type LibraryComponent struct {
-	Kind        string `json:"kind"`
-	Symbol      string `json:"symbol"`
-	Description string `json:"description,omitempty"`
+	Kind            string                  `json:"kind"`
+	RefPrefix       string                  `json:"ref_prefix,omitempty"`
+	Symbol          string                  `json:"symbol"`
+	Description     string                  `json:"description,omitempty"`
+	Group           string                  `json:"group,omitempty"`
+	NodeCount       int                     `json:"node_count,omitempty"`
+	NodeNames       []string                `json:"node_names,omitempty"`
+	DefaultValue    string                  `json:"default_value,omitempty"`
+	SymbolSVG       string                  `json:"symbol_svg,omitempty"`
+	Library         string                  `json:"library,omitempty"`
+	ModelName       string                  `json:"model_name,omitempty"`
+	InspectorFields []LibraryInspectorField `json:"inspector_fields,omitempty"`
+}
+
+// LibraryInspectorField is one inspector row; the frontend dispatches on Type
+// to pick a control. Type values: "spice_value" | "number" | "text" |
+// "source_spec".
+type LibraryInspectorField struct {
+	Name    string `json:"name"`
+	Label   string `json:"label"`
+	Unit    string `json:"unit,omitempty"`
+	Type    string `json:"type"`
+	Default string `json:"default,omitempty"`
 }
 
 // ExamplesListPayload is the response body of GET /api/examples. The field is
@@ -162,6 +195,23 @@ type NetlistEmitPayload struct {
 // NetlistEmitResultPayload returns the emitted source.
 type NetlistEmitResultPayload struct {
 	Netlist string `json:"netlist"`
+}
+
+// WaveformImportResultPayload is the JSON returned by POST /api/waveform/
+// import (m10 signal generator polish). The samples are returned as a flat
+// `[t0, v0, t1, v1, ...]` array — half the bytes of a `[[t,v],...]` shape
+// over the wire, and the frontend rebuilds pairs in O(n) on the way in.
+//
+// PointsString is the same data pre-formatted as the canonical `t:v;t:v;…`
+// encoding the SourceSpec.Params["points"] field uses; the frontend can drop
+// it straight into a SourceSpec without re-walking the array.
+type WaveformImportResultPayload struct {
+	Name         string    `json:"name"`
+	SampleRate   float64   `json:"sample_rate"`
+	Duration     float64   `json:"duration"`
+	PointCount   int       `json:"point_count"`
+	Points       []float64 `json:"points"`
+	PointsString string    `json:"points_string"`
 }
 
 // AckPayload acknowledges a request that has no other natural reply

@@ -25,12 +25,17 @@ type Sender interface {
 }
 
 // LibraryProvider is the small surface the session needs from the component
-// library. Milestone 3 ships a stub implementation in library.go;
-// milestone 9 will replace it with the real YAML/SPICE loader (DESIGN.md §8)
-// behind the same interface.
+// library. Milestone 3 ships a stub implementation in library.go; milestone 9
+// adds the real YAML/SPICE loader (DESIGN.md §8) behind the same interface.
+//
+// Import returns the freshly-discovered components and the basename the
+// server stored the .lib file under (which the client should cite in
+// Circuit.Libraries when instantiating one of those subcircuits). Echoing
+// these in the OpLibraryImport reply spares the client a follow-up
+// library.list round-trip.
 type LibraryProvider interface {
 	List(filter string) []LibraryComponent
-	Import(filename, body string) error
+	Import(filename, body string) (libFile string, imported []LibraryComponent, err error)
 }
 
 // Session holds per-connection state: the current Circuit, the active set of
@@ -287,10 +292,14 @@ func (s *Session) handleLibraryImport(env Envelope) error {
 	if err := decodePayload(env, &p); err != nil {
 		return s.replyError(env, ErrCodeBadPayload, err.Error())
 	}
-	if err := s.library.Import(p.Filename, p.Body); err != nil {
-		return s.replyError(env, ErrCodeNotImplemented, err.Error())
+	libFile, imported, err := s.library.Import(p.Filename, p.Body)
+	if err != nil {
+		return s.replyError(env, ErrCodeBadPayload, err.Error())
 	}
-	return s.reply(env, OpAck, AckPayload{Of: OpLibraryImport})
+	return s.reply(env, OpLibraryImport, LibraryImportResultPayload{
+		LibFile:  libFile,
+		Imported: imported,
+	})
 }
 
 func (s *Session) handleNetlistEmit(env Envelope) error {

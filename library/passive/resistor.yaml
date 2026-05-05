@@ -1,0 +1,12 @@
+kind: resistor
+ref_prefix: R
+symbol: R
+group: Passive
+description: Linear resistor
+node_count: 2
+node_names: [a, b]
+default_value: 1k
+symbol_svg: |
+  <path d="M0 5 H4 L6 1 L9 9 L12 1 L15 9 L17 5 H22"/>
+inspector_fields:
+  - { name: value, label: Resistance, unit: "Ω", type: spice_value, default: 1k }

@@ -13,10 +13,11 @@
 // the cheap derivation, not the FFT itself.
 
 import { useMemo, useEffect } from 'react';
-import { useCircuit, useSpectrum, defaultProbe, pivotComplexFrames } from '../../store/index.js';
+import { useCircuit, useSpectrum, useUI, defaultProbe, pivotComplexFrames } from '../../store/index.js';
 import SpectrumPlot from './SpectrumPlot.jsx';
 import SpectrumControls from './SpectrumControls.jsx';
 import SpectrumReadout from './SpectrumReadout.jsx';
+import Splitter from '../common/Splitter.jsx';
 import { findPeak, thd, formatHz, formatDb } from '../../lib/frequency.js';
 
 export default function Spectrum() {
@@ -26,6 +27,8 @@ export default function Spectrum() {
   const config = useSpectrum((s) => s.config);
   const status = useSpectrum((s) => s.status);
   const setConfig = useSpectrum((s) => s.setConfig);
+  const controlPanelWidth = useUI((s) => s.controlPanelWidth);
+  const setControlPanelWidth = useUI((s) => s.setControlPanelWidth);
 
   // Default the active probe to the circuit's first probe whenever circuit
   // changes and no probe is selected. Keeps the view non-empty after a
@@ -44,20 +47,33 @@ export default function Spectrum() {
 
   const probe = config.probe || defaultProbe(circuit);
   const mag = probe ? pivot.mag.get(probe) : null;
+  const phase = probe ? pivot.phase.get(probe) : null;
   const holdMag = probe ? holdPivot.mag.get(probe) : null;
   const freqs = pivot.freqs;
 
   // Marker / peak / THD computation — cheap, reruns whenever the user moves
-  // a marker or changes f0 even without re-running the analysis.
+  // a marker or changes f0 / harmonics count without re-running the analysis.
   const peak = useMemo(() => (mag && freqs.length ? findPeak(freqs, mag) : null), [freqs, mag]);
   const distortion = useMemo(() => {
     if (!mag || !freqs.length || !(config.f0 > 0)) return null;
-    return thd(freqs, mag, config.f0, 10);
-  }, [freqs, mag, config.f0]);
+    return thd(freqs, mag, config.f0, config.harmonics || 10, phase || null);
+  }, [freqs, mag, phase, config.f0, config.harmonics]);
+
+  // Harmonic-tracking markers: when the toggle is on, project the configured
+  // f0 + N harmonics into a list of {n, freq, mag_db} so the plot can overlay
+  // a small dashed line and dot at each one. Distortion already has the per-
+  // harmonic levels — we just gate it on the toggle.
+  const trackingMarkers = useMemo(() => {
+    if (!config.trackHarmonics || !distortion) return null;
+    const out = [];
+    if (config.f0 > 0) out.push({ n: 1, freq: config.f0, mag_db: peak?.mag_db ?? NaN });
+    for (const h of distortion.harmonics) out.push(h);
+    return out;
+  }, [config.trackHarmonics, config.f0, distortion, peak]);
 
   return (
     <div className="spectrum">
-      <div className="spectrum-workspace">
+      <div className="spectrum-workspace" style={{ '--ctrl-width': `${controlPanelWidth}px` }}>
         <div className="spectrum-screen-pane">
           <div className="spectrum-screen">
             {!circuit && <div className="scope-overlay">No circuit loaded.</div>}
@@ -80,6 +96,7 @@ export default function Spectrum() {
               markers={config.markers}
               peak={peak}
               detector={config.detector}
+              harmonicMarkers={trackingMarkers}
               onMarkerSet={(slot, freq) => {
                 setConfig({ markers: { ...config.markers, [slot]: freq } });
               }}
@@ -96,6 +113,7 @@ export default function Spectrum() {
             </div>
           </div>
         </div>
+        <Splitter width={controlPanelWidth} onChange={setControlPanelWidth} />
         <SpectrumControls />
       </div>
       <SpectrumReadout

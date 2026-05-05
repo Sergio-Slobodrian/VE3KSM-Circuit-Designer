@@ -27,6 +27,7 @@ import (
 
 	"circuit-designer/backend/internal/api"
 	"circuit-designer/backend/internal/engine"
+	"circuit-designer/backend/internal/library"
 )
 
 const listenAddr = ":8080"
@@ -42,6 +43,7 @@ const listenAddr = ":8080"
 var (
 	frontendCandidates = []string{"frontend/dist", "../frontend/dist"}
 	examplesCandidates = []string{"examples", "../examples"}
+	libraryCandidates  = []string{"library", "../library"}
 )
 
 func main() {
@@ -53,16 +55,19 @@ func main() {
 	// Run ngspice with cmd.Dir = examples/ so .LIB references in bundled
 	// fixtures (e.g. `tubes_koren.lib` in preamp_12ax7.cir) resolve. Without
 	// this, the engine's per-run private temp dir is used, no library file is
-	// found, and ngspice errors out with "Could not find include file".
-	// Milestone 9 (library import) will replace this with a proper library
-	// search path.
+	// found, and ngspice errors out with "Could not find include file". The
+	// library loader (m9) writes user-imported .lib files into this same
+	// directory so freshly-imported subcircuits resolve too.
 	examplesDir := resolveExamplesDir()
 	eng := engine.NewWithOptions(engine.Options{WorkDir: examplesDir})
 	defer func() { _ = eng.Close() }()
 
+	libraryProvider := buildLibrary(examplesDir)
+
 	apiSrv := api.New(eng, api.Options{
 		Logger:   log.Default(),
 		Examples: api.NewDirExamples(examplesDir),
+		Library:  libraryProvider,
 	})
 	defer func() { _ = apiSrv.Close() }()
 	apiHandler := apiSrv.Routes()
@@ -128,6 +133,38 @@ func ngspiceVersion() (string, error) {
 		return "unknown", nil
 	}
 	return first, nil
+}
+
+// buildLibrary instantiates the YAML/SPICE-backed library provider. Falls
+// back to the in-memory stub provider if the library directory cannot be
+// found or fails to load, so a misconfigured deployment degrades to the
+// previous milestone-3 behaviour rather than refusing to boot.
+func buildLibrary(libDir string) api.LibraryProvider {
+	root := resolveLibraryRoot()
+	if root == "" {
+		log.Printf("library: no manifests directory found; using in-memory stub palette")
+		return api.NewStubLibrary()
+	}
+	loader := library.NewLoader(root, libDir)
+	if err := loader.Reload(); err != nil {
+		log.Printf("library: load %s: %v; falling back to stub palette", root, err)
+		return api.NewStubLibrary()
+	}
+	count := len(loader.Snapshot().Components)
+	log.Printf("library: loaded %d components from %s (lib dir: %s)", count, root, libDir)
+	return api.NewLoadedLibrary(loader)
+}
+
+// resolveLibraryRoot picks the first library directory that exists.
+func resolveLibraryRoot() string {
+	for _, c := range libraryCandidates {
+		if abs, err := filepath.Abs(c); err == nil {
+			if info, err := os.Stat(abs); err == nil && info.IsDir() {
+				return abs
+			}
+		}
+	}
+	return ""
 }
 
 // resolveExamplesDir picks the first examples directory that exists. Returns

@@ -35,12 +35,17 @@ func Parse(r io.Reader) (*circuit.Circuit, error) {
 		Analyses:   []circuit.Analysis{},
 	}
 	layouts := map[string]circuit.Layout{}
+	// waveformMeta carries `*+ <ref> waveform=<mode> k=v ...` records keyed by
+	// component ref. Applied after parse so the order of the V/I component line
+	// vs. the *+ companion does not matter (m10 emits the *+ block past .END,
+	// but the parser shouldn't depend on that).
+	waveformMeta := map[string]waveformMetaRecord{}
 
 	titleSeen := false
 	endSeen := false
 
 	for _, lg := range logical {
-		if err := dispatch(lg.text, lg.line, &titleSeen, &endSeen, layouts, c); err != nil {
+		if err := dispatch(lg.text, lg.line, &titleSeen, &endSeen, layouts, waveformMeta, c); err != nil {
 			return nil, err
 		}
 	}
@@ -55,7 +60,34 @@ func Parse(r io.Reader) (*circuit.Circuit, error) {
 		}
 	}
 
+	// Apply collected high-level waveform metadata. Overrides whatever
+	// SourceSpec parseSource derived from the V/I line; the lowered PULSE/PWL
+	// params are dropped in favour of the high-level form so the inspector
+	// shows what the user originally entered.
+	for ref, meta := range waveformMeta {
+		for i := range c.Components {
+			if c.Components[i].Ref != ref {
+				continue
+			}
+			src := c.Components[i].Source
+			if src == nil {
+				src = &circuit.SourceSpec{}
+			}
+			src.Mode = meta.mode
+			src.Params = recoverFromPWLPoints(meta.mode, src.Params, meta.kv)
+			c.Components[i].Source = src
+			break
+		}
+	}
+
 	return c, nil
+}
+
+// waveformMetaRecord captures one parsed *+ waveform= line. `mode` is the
+// canonical lowered mode name; `kv` are the rest of the key=value pairs.
+type waveformMetaRecord struct {
+	mode string
+	kv   map[string]string
 }
 
 type logicalLine struct {
@@ -99,7 +131,7 @@ func mergeContinuations(raw []string) []logicalLine {
 // dispatch routes one logical line to the appropriate handler. The line is
 // normalized (whitespace-trimmed) once at entry so all subsequent prefix
 // and slice operations work consistently.
-func dispatch(rawLine string, num int, titleSeen, endSeen *bool, layouts map[string]circuit.Layout, c *circuit.Circuit) error {
+func dispatch(rawLine string, num int, titleSeen, endSeen *bool, layouts map[string]circuit.Layout, waveformMeta map[string]waveformMetaRecord, c *circuit.Circuit) error {
 	line := strings.TrimSpace(rawLine)
 	if line == "" {
 		return nil
@@ -108,7 +140,7 @@ func dispatch(rawLine string, num int, titleSeen, endSeen *bool, layouts map[str
 	// Past .END only *+ metadata is meaningful; everything else is ignored.
 	if *endSeen {
 		if strings.HasPrefix(line, "*+") {
-			return parseLayoutMeta(line, num, layouts)
+			return parseStructuredMeta(line, num, layouts, waveformMeta)
 		}
 		return nil
 	}
@@ -117,8 +149,8 @@ func dispatch(rawLine string, num int, titleSeen, endSeen *bool, layouts map[str
 	if !*titleSeen {
 		*titleSeen = true
 		if strings.HasPrefix(line, "*+") {
-			// First line is layout metadata; no title set.
-			return parseLayoutMeta(line, num, layouts)
+			// First line is structured metadata; no title set.
+			return parseStructuredMeta(line, num, layouts, waveformMeta)
 		}
 		if strings.HasPrefix(line, "*") {
 			c.Title = line[1:]
@@ -130,7 +162,7 @@ func dispatch(rawLine string, num int, titleSeen, endSeen *bool, layouts map[str
 
 	// Layout metadata may appear pre-.END too.
 	if strings.HasPrefix(line, "*+") {
-		return parseLayoutMeta(line, num, layouts)
+		return parseStructuredMeta(line, num, layouts, waveformMeta)
 	}
 
 	// Comment line, or commented-out directive.
@@ -447,46 +479,52 @@ func parseSource(line string, num int, ref, kind string, c *circuit.Circuit) err
 			}
 			src.AC = ac
 
-		case "SIN":
-			if i+1 >= len(spec) || spec[i+1] != "(" {
-				return errorAt(num, "SIN requires ( ... )")
-			}
-			closeIdx := -1
-			for j := i + 2; j < len(spec); j++ {
-				if spec[j] == ")" {
-					closeIdx = j
-					break
-				}
-			}
-			if closeIdx < 0 {
-				return errorAt(num, "SIN missing )")
-			}
-			args := spec[i+2 : closeIdx]
-			if len(args) == 0 {
-				return errorAt(num, "SIN needs at least offset/ampl/freq")
+		case "SIN", "PULSE", "SFFM", "PWL":
+			closeIdx, args, err := readParenList(spec, i, num, head)
+			if err != nil {
+				return err
 			}
 			if src.Mode != "" && src.Mode != "dc" {
 				return errorAt(num, "source has more than one transient spec")
 			}
-			names := []string{"offset", "ampl", "freq", "td", "damp", "phase"}
-			params := map[string]string{}
-			for k, a := range args {
-				if k >= len(names) {
-					return errorAt(num, "SIN has too many args")
-				}
-				params[names[k]] = a
+			params, mode, perr := parseTransientArgs(head, args, num)
+			if perr != nil {
+				return perr
 			}
-			// SIN supersedes a bare DC: ngspice treats DC as the offset under
-			// transient analysis when both are given. Preserve any DC value
-			// alongside in Params["dc"] so round-trip recovers it.
+			// Any transient spec supersedes a bare DC: ngspice treats DC as
+			// the offset under transient analysis when both are given.
+			// Preserve any DC value alongside in Params["dc"] so round-trip
+			// recovers it.
 			if src.Mode == "dc" && src.Params != nil {
 				if dcv, ok := src.Params["value"]; ok {
 					params["dc"] = dcv
 				}
 			}
-			src.Mode = "sin"
+			src.Mode = mode
 			src.Params = params
 			i = closeIdx + 1
+			// PWL accepts optional `r=<offset>` and `td=<delay>` trailing
+			// tokens (ngspice qualifiers). Consume them in either order so a
+			// round-trip preserves the repeat + time-shift hints. `td=` is
+			// stored under the user-facing `td` key so the inspector / *+
+			// meta path picks it up; `r=` stays under the internal `_repeat`
+			// marker.
+			if mode == "pwl" {
+				for i < len(spec) {
+					low := strings.ToLower(spec[i])
+					if strings.HasPrefix(low, "r=") {
+						params["_repeat"] = strings.TrimPrefix(low, "r=")
+						i++
+						continue
+					}
+					if strings.HasPrefix(low, "td=") {
+						params["td"] = strings.TrimPrefix(low, "td=")
+						i++
+						continue
+					}
+					break
+				}
+			}
 
 		default:
 			return ErrUnsupported{Line: num, SourceMode: head}
@@ -505,6 +543,98 @@ func parseSource(line string, num int, ref, kind string, c *circuit.Circuit) err
 	return nil
 }
 
+// readParenList scans a "( ... )" group starting at spec[i+1] (where spec[i]
+// is the keyword), returning the index of the closing paren and the inner
+// tokens.
+func readParenList(spec []string, i, num int, head string) (int, []string, error) {
+	if i+1 >= len(spec) || spec[i+1] != "(" {
+		return 0, nil, errorAt(num, head+" requires ( ... )")
+	}
+	for j := i + 2; j < len(spec); j++ {
+		if spec[j] == ")" {
+			return j, spec[i+2 : j], nil
+		}
+	}
+	return 0, nil, errorAt(num, head+" missing )")
+}
+
+// parseTransientArgs maps the inner tokens of a transient-spec parenthesised
+// list onto the canonical Params schema for that mode. For PWL the args are
+// (t,v) pairs and end up in Params["points"] using the same `t:v;t:v;...`
+// encoding the synthesizers use.
+func parseTransientArgs(head string, args []string, num int) (params map[string]string, mode string, err error) {
+	switch head {
+	case "SIN":
+		if len(args) == 0 {
+			return nil, "", errorAt(num, "SIN needs at least offset/ampl/freq")
+		}
+		names := []string{"offset", "ampl", "freq", "td", "damp", "phase"}
+		params = map[string]string{}
+		for k, a := range args {
+			if k >= len(names) {
+				return nil, "", errorAt(num, "SIN has too many args")
+			}
+			if names[k] == "ampl" {
+				a = peakToVppSpiceArg(a)
+			}
+			params[names[k]] = a
+		}
+		return params, "sin", nil
+
+	case "PULSE":
+		if len(args) == 0 {
+			return nil, "", errorAt(num, "PULSE needs at least v1/v2/td")
+		}
+		names := []string{"v1", "v2", "td", "tr", "tf", "pw", "per"}
+		params = map[string]string{}
+		for k, a := range args {
+			if k >= len(names) {
+				return nil, "", errorAt(num, "PULSE has too many args")
+			}
+			params[names[k]] = a
+		}
+		return params, "pulse", nil
+
+	case "SFFM":
+		if len(args) == 0 {
+			return nil, "", errorAt(num, "SFFM needs at least offset/ampl/fc")
+		}
+		names := []string{"offset", "ampl", "fc", "mdi", "fm"}
+		params = map[string]string{}
+		for k, a := range args {
+			if k >= len(names) {
+				return nil, "", errorAt(num, "SFFM has too many args")
+			}
+			if names[k] == "ampl" {
+				a = peakToVppSpiceArg(a)
+			}
+			params[names[k]] = a
+		}
+		return params, "sffm", nil
+
+	case "PWL":
+		if len(args)%2 != 0 {
+			return nil, "", errorAt(num, "PWL needs an even number of args (t v t v ...)")
+		}
+		if len(args) == 0 {
+			return map[string]string{"points": ""}, "pwl", nil
+		}
+		// Concatenate as `t:v;t:v;...` so the inspector + synthesizer share
+		// one canonical points encoding (see waveforms.go formatPointsString).
+		var sb strings.Builder
+		for k := 0; k < len(args); k += 2 {
+			if k > 0 {
+				sb.WriteByte(';')
+			}
+			sb.WriteString(args[k])
+			sb.WriteByte(':')
+			sb.WriteString(args[k+1])
+		}
+		return map[string]string{"points": sb.String()}, "pwl", nil
+	}
+	return nil, "", errorAt(num, "unknown transient spec "+head)
+}
+
 // looksLikeKeyword identifies tokens that begin a source-spec section so the
 // optional-phase consumer in the AC handler doesn't accidentally swallow a
 // following SIN/DC/etc. word as a phase value.
@@ -515,6 +645,62 @@ func looksLikeKeyword(s string) bool {
 		return true
 	}
 	return false
+}
+
+// parseStructuredMeta routes one *+ line to the right map. Lines whose first
+// key is `waveform=` go to the waveform-meta dispatcher (m10); everything
+// else flows through the original layout-meta path. Lines that mix layout
+// keys with `waveform=` are split: layout keys land in the layouts map, the
+// waveform record goes to waveformMeta keyed on the same ref.
+func parseStructuredMeta(line string, num int, layouts map[string]circuit.Layout, waveformMeta map[string]waveformMetaRecord) error {
+	rest := strings.TrimSpace(strings.TrimPrefix(line, "*+"))
+	fields := strings.Fields(rest)
+	if len(fields) < 2 {
+		return errorAt(num, "structured metadata needs ref and at least one key=value")
+	}
+	hasWaveform := false
+	for _, f := range fields[1:] {
+		if strings.HasPrefix(strings.ToLower(f), "waveform=") {
+			hasWaveform = true
+			break
+		}
+	}
+	if hasWaveform {
+		return parseWaveformMeta(line, num, waveformMeta)
+	}
+	return parseLayoutMeta(line, num, layouts)
+}
+
+// parseWaveformMeta consumes one `*+ <ref> waveform=<mode> k=v ...` line and
+// stashes the record in the waveformMeta map. The mode is required; unknown
+// modes are accepted (so future modes don't break older binaries) but they
+// will silently overwrite SourceSpec.Mode on the matching component.
+func parseWaveformMeta(line string, num int, waveformMeta map[string]waveformMetaRecord) error {
+	rest := strings.TrimSpace(strings.TrimPrefix(line, "*+"))
+	fields := strings.Fields(rest)
+	if len(fields) < 2 {
+		return errorAt(num, "waveform metadata needs ref and waveform=<mode>")
+	}
+	ref := fields[0]
+	rec := waveformMetaRecord{kv: map[string]string{}}
+	for _, kv := range fields[1:] {
+		eq := strings.Index(kv, "=")
+		if eq < 0 {
+			continue
+		}
+		key := strings.ToLower(kv[:eq])
+		val := unescapeMetaValue(kv[eq+1:])
+		if key == "waveform" {
+			rec.mode = strings.ToLower(val)
+			continue
+		}
+		rec.kv[key] = val
+	}
+	if rec.mode == "" {
+		return errorAt(num, "waveform metadata missing waveform=<mode>")
+	}
+	waveformMeta[ref] = rec
+	return nil
 }
 
 // parseLayoutMeta parses one *+ comment line into the layouts map.

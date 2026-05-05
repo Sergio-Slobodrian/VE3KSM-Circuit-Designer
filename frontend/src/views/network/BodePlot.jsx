@@ -28,10 +28,13 @@ const ACCENT_LINE = 'rgba(160, 180, 220, 0.45)';
  *   phase: ArrayLike<number> | null,
  *   tau: ArrayLike<number> | null,
  *   markers: object | null,
+ *   autoMarkers?: object,
  *   probe: string | null,
  * }} props
  */
-export default function BodePlot({ freqs, mag, phase, tau, markers, probe }) {
+export default function BodePlot({ freqs, mag, phase, tau, markers, autoMarkers, probe }) {
+  const markersRef = useRef({ markers, autoMarkers });
+  markersRef.current = { markers, autoMarkers };
   const magRef = useRef(null);
   const phaseRef = useRef(null);
   const magPlot = useRef(/** @type {uPlot|null} */(null));
@@ -91,6 +94,7 @@ export default function BodePlot({ freqs, mag, phase, tau, markers, probe }) {
       hooks: {
         drawAxes: [
           (u) => emphasizeLevel(u, 0, 'y'),
+          (u) => drawMarkers(u, markersRef.current, 'mag'),
         ],
       },
     };
@@ -129,6 +133,7 @@ export default function BodePlot({ freqs, mag, phase, tau, markers, probe }) {
             emphasizeLevel(u, -180, 'y');
             emphasizeLevel(u, 180, 'y');
           },
+          (u) => drawMarkers(u, markersRef.current, 'phase'),
         ],
       },
     };
@@ -180,16 +185,13 @@ export default function BodePlot({ freqs, mag, phase, tau, markers, probe }) {
     return () => ro.disconnect();
   }, []);
 
-  // Marker overlays — drawn imperatively over the canvas so they refresh on
-  // pan/zoom along with the trace.
+  // Marker overlays — drawn imperatively from the drawAxes hook above. Force
+  // both plots to redraw when the marker payload or the auto-marker toggles
+  // change so the overlay updates without a full plot rebuild.
   useEffect(() => {
-    const m = magPlot.current;
-    if (!m || !markers) return;
-    m.addHook = m.addHook || (() => {});
-    // The drawAxes hook re-runs on every redraw; we patch the canvas via a
-    // setSelect-style overlay instead. Simpler: draw on the cursor canvas.
-    return () => {};
-  }, [markers]);
+    if (magPlot.current)   magPlot.current.redraw(false);
+    if (phasePlot.current) phasePlot.current.redraw(false);
+  }, [markers, autoMarkers]);
 
   return (
     <div className="bode-stack">
@@ -197,6 +199,80 @@ export default function BodePlot({ freqs, mag, phase, tau, markers, probe }) {
       <div ref={phaseRef} className="bode-pane bode-pane-phase" />
     </div>
   );
+}
+
+/**
+ * Draw vertical lines + small dots at the auto-marker frequencies on whichever
+ * pane is being painted. Each marker honours the same on/off toggles the
+ * readout uses; muted colours so the trace stays the dominant element.
+ *
+ * pane is 'mag' or 'phase' — distinguishes the two stacked uPlots so we can
+ * dot a marker on the magnitude pane only when it has a meaningful y value
+ * (peak / unity / -3 dB / -40 dB / gain margin).
+ */
+function drawMarkers(u, ref, pane) {
+  if (!ref || !ref.markers) return;
+  const m = ref.markers;
+  const am = ref.autoMarkers || {};
+  const ctx = u.ctx;
+  const top = u.bbox.top;
+  const bottom = u.bbox.top + u.bbox.height;
+  const xMin = u.scales.x?.min ?? -Infinity;
+  const xMax = u.scales.x?.max ??  Infinity;
+
+  const drawVLine = (freq, color, dash) => {
+    if (!Number.isFinite(freq) || freq <= 0) return null;
+    if (freq < xMin || freq > xMax) return null;
+    const x = u.valToPos(freq, 'x', true);
+    if (!Number.isFinite(x)) return null;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.stroke();
+    ctx.restore();
+    return x;
+  };
+  const drawDot = (x, y, color) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  if (am.peak !== false && m.peak) {
+    const x = drawVLine(m.peak.freq, 'rgba(245, 184, 64, 0.55)', null);
+    if (pane === 'mag' && x != null) {
+      drawDot(x, u.valToPos(m.peak.mag_db, 'y', true), '#f5b840');
+    }
+  }
+  if (am.minus3dB !== false && m.bw) {
+    drawVLine(m.bw.lo, 'rgba(150, 200, 255, 0.45)', [3, 3]);
+    drawVLine(m.bw.hi, 'rgba(150, 200, 255, 0.45)', [3, 3]);
+  }
+  if (am.minus40dB === true && m.bw40) {
+    drawVLine(m.bw40.lo, 'rgba(150, 200, 255, 0.30)', [2, 4]);
+    drawVLine(m.bw40.hi, 'rgba(150, 200, 255, 0.30)', [2, 4]);
+  }
+  if (am.unityGain !== false && m.unity) {
+    const x = drawVLine(m.unity.freq, 'rgba(212, 83, 126, 0.7)', null);
+    if (pane === 'mag' && x != null) drawDot(x, u.valToPos(0, 'y', true), '#d4537e');
+  }
+  if (am.gainMargin !== false && m.gm) {
+    const x = drawVLine(m.gm.freq, 'rgba(151, 196, 89, 0.7)', [4, 2]);
+    if (pane === 'mag' && x != null) {
+      drawDot(x, u.valToPos(m.gm.mag_db, 'y', true), '#97c459');
+    }
+    if (pane === 'phase' && x != null) {
+      drawDot(x, u.valToPos(-180, 'y', true), '#97c459');
+    }
+  }
 }
 
 /**

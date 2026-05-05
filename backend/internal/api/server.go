@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"circuit-designer/backend/internal/circuit"
 	"circuit-designer/backend/internal/engine"
 	"circuit-designer/backend/internal/netlist"
+	"circuit-designer/backend/internal/waveform"
 
 	"github.com/gorilla/websocket"
 )
@@ -39,8 +41,8 @@ type Server struct {
 
 // Options configures Server.New.
 type Options struct {
-	// Library overrides the default stub library. Useful for tests; the
-	// production wiring will pass a real loader once milestone 9 ships.
+	// Library overrides the default stub library. Production callers pass the
+	// YAML/SPICE-backed loader; tests are happy with the stub.
 	Library LibraryProvider
 
 	// Examples overrides the default examples provider. When nil, no example
@@ -97,9 +99,11 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/healthz", s.handleHealthz)
 	mux.HandleFunc("/api/library", s.handleLibraryHTTP)
+	mux.HandleFunc("/api/library/import", s.handleLibraryImportHTTP)
 	mux.HandleFunc("/api/circuit/parse", s.handleCircuitParse)
 	mux.HandleFunc("/api/circuit/emit", s.handleCircuitEmit)
 	mux.HandleFunc("/api/circuit/export", s.handleCircuitExport)
+	mux.HandleFunc("/api/waveform/import", s.handleWaveformImport)
 	mux.HandleFunc("/api/examples", s.handleExamplesList)
 	mux.HandleFunc("/api/examples/", s.handleExamplesLoad)
 	mux.HandleFunc("/ws", s.handleWebSocket)
@@ -146,6 +150,31 @@ func (s *Server) handleLibraryHTTP(w http.ResponseWriter, r *http.Request) {
 		Components: s.library.List(r.URL.Query().Get("filter")),
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleLibraryImportHTTP accepts a SPICE .lib body as JSON and forwards it to
+// the LibraryProvider. Returns the freshly-discovered components so the
+// frontend can update its palette in one round-trip. Mirrors the WebSocket
+// OpLibraryImport flow for clients that prefer REST.
+func (s *Server) handleLibraryImportHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST only")
+		return
+	}
+	var p LibraryImportPayload
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<20)).Decode(&p); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "decode", err.Error())
+		return
+	}
+	libFile, imported, err := s.library.Import(p.Filename, p.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "import", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, LibraryImportResultPayload{
+		LibFile:  libFile,
+		Imported: imported,
+	})
 }
 
 // handleCircuitParse accepts SPICE source as the request body and returns the
@@ -245,6 +274,73 @@ func (s *Server) handleCircuitExport(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = io.WriteString(w, sb.String())
+}
+
+// handleWaveformImport ingests a CSV or WAV file via multipart/form-data and
+// returns the decoded (t,v) point list plus inferred sample rate. The
+// frontend stores the result on the active V/I source's SourceSpec.Params so
+// the next netlist emit lowers it to a PWL transient spec (DESIGN.md §7.1
+// "arb" / "pwl"). Body cap is 16 MB so a moderate WAV (e.g. 30 s mono 48 kHz
+// 16-bit ≈ 2.9 MB) fits comfortably.
+func (s *Server) handleWaveformImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST only")
+		return
+	}
+	if err := r.ParseMultipartForm(16 << 20); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "decode", err.Error())
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "decode", "missing form field 'file'")
+		return
+	}
+	defer file.Close()
+	body, err := io.ReadAll(io.LimitReader(file, 16<<20))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "decode", err.Error())
+		return
+	}
+	peak := 1.0
+	if v := r.FormValue("peak"); v != "" {
+		if p, err := strconv.ParseFloat(v, 64); err == nil && p > 0 {
+			peak = p
+		}
+	}
+	rate := 0.0
+	if v := r.FormValue("sample_rate"); v != "" {
+		if p, err := strconv.ParseFloat(v, 64); err == nil && p > 0 {
+			rate = p
+		}
+	}
+	dec, err := waveform.Decode(header.Filename, body, waveform.DecodeOptions{
+		Peak:           peak,
+		SampleRateHint: rate,
+	})
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "import", err.Error())
+		return
+	}
+	flat := make([]float64, 0, len(dec.Points)*2)
+	var sb strings.Builder
+	for i, p := range dec.Points {
+		flat = append(flat, p[0], p[1])
+		if i > 0 {
+			sb.WriteByte(';')
+		}
+		sb.WriteString(strconv.FormatFloat(p[0], 'g', -1, 64))
+		sb.WriteByte(':')
+		sb.WriteString(strconv.FormatFloat(p[1], 'g', -1, 64))
+	}
+	writeJSON(w, http.StatusOK, WaveformImportResultPayload{
+		Name:         dec.Name,
+		SampleRate:   dec.SampleRate,
+		Duration:     dec.Duration,
+		PointCount:   len(dec.Points),
+		Points:       flat,
+		PointsString: sb.String(),
+	})
 }
 
 // handleCircuitEmit accepts a Circuit JSON body and returns SPICE source.

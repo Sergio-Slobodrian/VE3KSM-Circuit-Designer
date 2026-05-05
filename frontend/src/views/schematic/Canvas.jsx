@@ -264,7 +264,17 @@ export default function Canvas() {
     ev.preventDefault();
     const w = eventToWorld(svgRef.current, ev);
     if (!w) return;
-    const ref = addComponent({ kind, x: w.x, y: w.y });
+
+    // The richer JSON payload (m9) carries node_count, model_name, and the
+    // .lib file the subcircuit lives in. Drop it onto addComponent; the store
+    // falls back to kind-only behaviour when this MIME is absent.
+    let manifest = null;
+    const raw = ev.dataTransfer.getData('application/x-circuit-component');
+    if (raw) {
+      try { manifest = JSON.parse(raw); }
+      catch { /* malformed — ignore, drop becomes kind-only */ }
+    }
+    const ref = addComponent({ kind, x: w.x, y: w.y, manifest });
     if (ref) setSelection([ref]);
   }
 

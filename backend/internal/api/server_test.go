@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 
 	"circuit-designer/backend/internal/circuit"
 	"circuit-designer/backend/internal/engine"
+	"circuit-designer/backend/internal/library"
 
 	"github.com/gorilla/websocket"
 )
@@ -114,6 +116,125 @@ func TestHTTPLibrary(t *testing.T) {
 	}
 	if len(p.Components) == 0 {
 		t.Errorf("expected components")
+	}
+}
+
+// TestHTTPLibraryImport drives /api/library/import with a real loader rooted
+// in a temp dir (m9). Asserts the response carries the discovered subcircuits,
+// the .lib body is persisted into LibDir, and a follow-up GET /api/library
+// reflects the new entries.
+func TestHTTPLibraryImport(t *testing.T) {
+	root := t.TempDir()
+	libDir := t.TempDir()
+	loader := library.NewLoader(root, libDir)
+	if err := loader.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	srv := New(&fakeEngine{}, Options{
+		Logger:  quietLogger(),
+		Library: NewLoadedLibrary(loader),
+	})
+	hs := httptest.NewServer(srv.Routes())
+	defer hs.Close()
+	defer srv.Close()
+
+	body, err := json.Marshal(LibraryImportPayload{
+		Filename: "tubes_koren.lib",
+		Body:     ".SUBCKT 12AX7 P G K\n.ENDS 12AX7\n",
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	resp, err := http.Post(hs.URL+"/api/library/import", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status %d: %s", resp.StatusCode, raw)
+	}
+	var rp LibraryImportResultPayload
+	if err := json.NewDecoder(resp.Body).Decode(&rp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if rp.LibFile != "tubes_koren.lib" {
+		t.Errorf("LibFile: got %q want tubes_koren.lib", rp.LibFile)
+	}
+	if len(rp.Imported) != 1 || rp.Imported[0].ModelName != "12AX7" {
+		t.Errorf("Imported: %+v", rp.Imported)
+	}
+
+	// .lib file landed in LibDir for the engine to find at sim time.
+	if _, err := os.Stat(filepath.Join(libDir, "tubes_koren.lib")); err != nil {
+		t.Errorf("expected .lib at %s: %v", libDir, err)
+	}
+
+	// GET /api/library now lists the imported entry.
+	listResp, err := http.Get(hs.URL + "/api/library")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	defer listResp.Body.Close()
+	var lp LibraryListPayload
+	if err := json.NewDecoder(listResp.Body).Decode(&lp); err != nil {
+		t.Fatalf("list decode: %v", err)
+	}
+	found := false
+	for _, c := range lp.Components {
+		if c.ModelName == "12AX7" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("library list missing imported 12AX7: %+v", lp.Components)
+	}
+}
+
+// TestHTTPWaveformImport drives /api/waveform/import with a small CSV body
+// (m10) and asserts the returned (t,v) point list parses back into the
+// canonical SourceSpec.Params["points"] format.
+func TestHTTPWaveformImport(t *testing.T) {
+	hs, cleanup := newTestServer(t, &fakeEngine{})
+	defer cleanup()
+
+	body := bytes.Buffer{}
+	mw := multipart.NewWriter(&body)
+	if err := mw.WriteField("peak", "1"); err != nil {
+		t.Fatal(err)
+	}
+	fw, err := mw.CreateFormFile("file", "imp.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = fw.Write([]byte("0,0\n0.001,0.5\n0.002,0\n0.003,-0.5\n0.004,0\n"))
+	mw.Close()
+
+	resp, err := http.Post(hs.URL+"/api/waveform/import", mw.FormDataContentType(), &body)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status %d: %s", resp.StatusCode, raw)
+	}
+	var rp WaveformImportResultPayload
+	if err := json.NewDecoder(resp.Body).Decode(&rp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if rp.Name != "imp.csv" {
+		t.Errorf("Name: got %q", rp.Name)
+	}
+	if rp.PointCount != 5 {
+		t.Errorf("PointCount: got %d, want 5", rp.PointCount)
+	}
+	if len(rp.Points) != 10 {
+		t.Errorf("Points (flat): got len %d, want 10", len(rp.Points))
+	}
+	if !strings.Contains(rp.PointsString, "0.001:1") {
+		t.Errorf("PointsString missing peak-scaled pair: %q", rp.PointsString)
 	}
 }
 

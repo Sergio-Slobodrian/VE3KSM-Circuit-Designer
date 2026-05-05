@@ -1,0 +1,12 @@
+kind: current_source
+ref_prefix: I
+symbol: I
+group: Sources
+description: Independent current source
+node_count: 2
+node_names: [pos, neg]
+symbol_svg: |
+  <circle cx="11" cy="7" r="5" fill="none"/>
+  <path d="M11 4 V10 M9 7 H13"/>
+inspector_fields:
+  - { name: source, label: Waveform, type: source_spec }

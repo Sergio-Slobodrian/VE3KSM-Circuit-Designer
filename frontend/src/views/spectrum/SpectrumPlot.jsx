@@ -19,10 +19,11 @@ const PEAK_COLOR  = '#f5b840';
  *   markers: { m1: number|null, m2: number|null },
  *   peak: { freq: number, mag_db: number } | null,
  *   detector: string,
+ *   harmonicMarkers?: Array<{ n: number, freq: number, mag_db: number }> | null,
  *   onMarkerSet?: (slot: 'm1'|'m2', freq: number) => void,
  * }} props
  */
-export default function SpectrumPlot({ freqs, mag, holdMag, probe, markers, peak, onMarkerSet }) {
+export default function SpectrumPlot({ freqs, mag, holdMag, probe, markers, peak, harmonicMarkers, onMarkerSet }) {
   const containerRef = useRef(null);
 
   // Build trace + layout objects fresh on every render. Plotly.react diffs
@@ -85,6 +86,25 @@ export default function SpectrumPlot({ freqs, mag, holdMag, probe, markers, peak
         text: '▼', showarrow: false, font: { color: PEAK_COLOR, size: 14 }, yshift: 10,
       });
     }
+    // Harmonic tracking overlay: dashed verticals at every harmonic of f0
+    // plus a tiny "Hn" tag at the top so the user can spot them at a glance.
+    // Skips harmonics with no resolvable level (e.g. above the swept range).
+    if (harmonicMarkers && harmonicMarkers.length > 0) {
+      for (const h of harmonicMarkers) {
+        if (!Number.isFinite(h.freq) || h.freq <= 0) continue;
+        shapes.push({
+          type: 'line', x0: h.freq, x1: h.freq, y0: 0, y1: 1,
+          xref: 'x', yref: 'paper',
+          line: { color: 'rgba(245, 184, 64, 0.45)', width: 0.8, dash: 'dot' },
+        });
+        annotations.push({
+          x: h.freq, y: 0, xref: 'x', yref: 'paper',
+          text: `H${h.n}`, showarrow: false,
+          font: { color: PEAK_COLOR, size: 9 },
+          bgcolor: 'rgba(10,13,18,0.55)', borderpad: 1, yshift: 12,
+        });
+      }
+    }
     const layout = {
       paper_bgcolor: '#0a0d12',
       plot_bgcolor: '#0a0d12',
@@ -118,7 +138,7 @@ export default function SpectrumPlot({ freqs, mag, holdMag, probe, markers, peak
       scrollZoom: true,
     };
     return { traces, layout, config };
-  }, [freqs, mag, holdMag, probe, markers, peak]);
+  }, [freqs, mag, holdMag, probe, markers, peak, harmonicMarkers]);
 
   // Render / update on every fig change. Plotly.react is the right API: it
   // diffs the layout/data and only redraws what actually changed.

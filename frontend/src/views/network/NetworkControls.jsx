@@ -123,9 +123,11 @@ export default function NetworkControls() {
         <h4>Auto markers</h4>
         {Object.entries({
           minus3dB: '−3 dB',
+          minus40dB: '−40 dB',
           peak: 'Peak',
           unityGain: 'Unity gain',
           phaseMargin: 'Phase margin',
+          gainMargin: 'Gain margin',
         }).map(([k, label]) => (
           <Row key={k} label={label}>
             <button

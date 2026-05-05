@@ -11,6 +11,7 @@ import (
 
 	"circuit-designer/backend/internal/circuit"
 	"circuit-designer/backend/internal/engine"
+	"circuit-designer/backend/internal/library"
 )
 
 // --- test doubles -----------------------------------------------------------
@@ -406,9 +407,68 @@ func TestSessionLibraryListReturnsStub(t *testing.T) {
 	}
 }
 
-// TestSessionLibraryImportReportsDeferred verifies milestone-3's library.import
-// stub returns a structured "not implemented" error.
-func TestSessionLibraryImportReportsDeferred(t *testing.T) {
+// TestSessionLibraryImportRoundTrip verifies that the loaded LibraryProvider
+// (the production wiring) accepts a .lib body, returns the discovered
+// subcircuits in the response payload, and that a follow-up library.list
+// reflects them — i.e. the snapshot is reloaded synchronously.
+func TestSessionLibraryImportRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	libDir := t.TempDir()
+	loader := library.NewLoader(root, libDir)
+	if err := loader.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+
+	send := newMemSender()
+	sess := NewSession(&fakeEngine{}, NewLoadedLibrary(loader), send)
+	t.Cleanup(func() { _ = sess.Close() })
+
+	body := ".SUBCKT 12AX7 P G K\n.ENDS 12AX7\n"
+	if err := sess.Handle(context.Background(), rawEnvelope(t, OpLibraryImport, "1", LibraryImportPayload{
+		Filename: "tubes_koren.lib", Body: body,
+	})); err != nil {
+		t.Fatalf("Handle import: %v", err)
+	}
+	env := waitOp(t, send, OpLibraryImport, time.Second)
+	var rp LibraryImportResultPayload
+	if err := json.Unmarshal(env.Payload, &rp); err != nil {
+		t.Fatalf("decode import reply: %v", err)
+	}
+	if rp.LibFile != "tubes_koren.lib" {
+		t.Errorf("LibFile: got %q want tubes_koren.lib", rp.LibFile)
+	}
+	if len(rp.Imported) != 1 || rp.Imported[0].ModelName != "12AX7" {
+		t.Errorf("Imported: got %+v want one 12AX7 entry", rp.Imported)
+	}
+	if rp.Imported[0].Group != "Tubes" {
+		t.Errorf("Group: got %q want Tubes", rp.Imported[0].Group)
+	}
+
+	// Follow-up library.list sees the new component.
+	if err := sess.Handle(context.Background(), rawEnvelope(t, OpLibraryList, "2", LibraryListPayload{})); err != nil {
+		t.Fatalf("Handle list: %v", err)
+	}
+	env = waitOp(t, send, OpLibraryList, time.Second)
+	var lp LibraryListPayload
+	if err := json.Unmarshal(env.Payload, &lp); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	found := false
+	for _, c := range lp.Components {
+		if c.ModelName == "12AX7" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("library.list after import did not list 12AX7")
+	}
+}
+
+// TestSessionLibraryImportStubRejects verifies the stub LibraryProvider
+// (used when the on-disk library cannot be located) reports a structured
+// error rather than silently accepting an import it cannot persist.
+func TestSessionLibraryImportStubRejects(t *testing.T) {
 	send := newMemSender()
 	sess := NewSession(&fakeEngine{}, NewStubLibrary(), send)
 	t.Cleanup(func() { _ = sess.Close() })
@@ -421,8 +481,8 @@ func TestSessionLibraryImportReportsDeferred(t *testing.T) {
 	env := waitOp(t, send, OpError, time.Second)
 	var ep ErrorPayload
 	_ = json.Unmarshal(env.Payload, &ep)
-	if ep.Code != ErrCodeNotImplemented {
-		t.Errorf("code: got %q want %q", ep.Code, ErrCodeNotImplemented)
+	if ep.Code != ErrCodeBadPayload {
+		t.Errorf("code: got %q want %q", ep.Code, ErrCodeBadPayload)
 	}
 }
 

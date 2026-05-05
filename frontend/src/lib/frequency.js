@@ -110,6 +110,42 @@ export function phaseMargin(freqs, mag, phaseDeg) {
   return 180 + wrapped;
 }
 
+/**
+ * First frequency where phase crosses `targetDeg`, in either direction. The
+ * returned `dir` field is `'down'` when the phase is decreasing across the
+ * boundary and `'up'` otherwise. Operates on raw (unwrapped) phase.
+ *
+ * Returns null when no crossing is found within the swept range.
+ */
+export function phaseCrossover(freqs, phaseDeg, targetDeg) {
+  if (!freqs || freqs.length < 2 || !phaseDeg) return null;
+  for (let i = 0; i < phaseDeg.length - 1; i++) {
+    const a = phaseDeg[i] - targetDeg;
+    const b = phaseDeg[i + 1] - targetDeg;
+    if ((a >= 0 && b < 0) || (a <= 0 && b > 0)) {
+      const f = lerpY(a, freqs[i], b, freqs[i + 1], 0);
+      return { freq: f, index: i, dir: a > b ? 'down' : 'up' };
+    }
+  }
+  return null;
+}
+
+/**
+ * Gain margin: the magnitude (in dB) below 0 dB at the frequency where the
+ * open-loop phase crosses -180°. Returns `{ freq, mag_db, gm_db }` where
+ * gm_db = -mag_db (positive = stable, negative = unstable).
+ *
+ * Operates on raw (unwrapped) phase since wrapping confuses the crossing
+ * search. Returns null when no -180° crossing exists.
+ */
+export function gainMargin(freqs, mag, phaseDeg) {
+  const xover = phaseCrossover(freqs, phaseDeg, -180);
+  if (!xover) return null;
+  const i = xover.index;
+  const magAt = lerpY(freqs[i], mag[i], freqs[i + 1], mag[i + 1], xover.freq);
+  return { freq: xover.freq, mag_db: magAt, gm_db: -magAt };
+}
+
 /** Wrap a phase (degrees) into (-180, 180]. */
 export function wrapPhase(deg) {
   if (!Number.isFinite(deg)) return NaN;
@@ -139,52 +175,113 @@ export function groupDelay(freqs, phaseDeg) {
 }
 
 /**
- * Total Harmonic Distortion for a fundamental at f0, computed from a dB
- * magnitude spectrum. We sum the linear powers of harmonics 2..N and divide
- * by the fundamental's power.
+ * Total Harmonic Distortion + Noise readouts for a fundamental at f0,
+ * computed from a dB magnitude spectrum (and an optional phase array, for
+ * per-harmonic phase reporting).
  *
- * Returns { thdPercent, thdDb, sinad, harmonics } where harmonics is an
- * array of { n, freq, mag_db, dbc } entries. NaN when f0 falls outside the
- * swept range or the spectrum has fewer than 2 bins.
+ * Returns:
+ *   thdPercent  — sqrt(Σ harmonic²) / fundamental, ×100
+ *   thdDb       — same ratio in dB (negative = clean)
+ *   thdPlusNDb  — sqrt(Σ everything-but-fundamental²) / fundamental, in dB
+ *   thdPlusNPercent — same as percent
+ *   snrDb       — fundamental / Σ noise (excluding fundamental + harmonics)
+ *   sinad       — fundamental / RMS of all other bins, in dB
+ *   harmonics   — Array<{ n, freq, mag_db, dbc, percent, phase_deg }>
+ *
+ * All ratios degrade gracefully (NaN) when f0 is out of the sweep or the
+ * spectrum has fewer than 2 bins. The fundamental bin and each harmonic bin
+ * are excluded from the SNR noise sum so a clean tone reports very high SNR
+ * rather than ~0 dB.
  */
-export function thd(freqs, mag, f0, maxHarmonics = 10) {
+export function thd(freqs, mag, f0, maxHarmonics = 10, phaseDegArr = null) {
   if (!freqs || freqs.length < 2 || !mag || !(f0 > 0)) {
-    return { thdPercent: NaN, thdDb: NaN, sinad: NaN, harmonics: [] };
+    return {
+      thdPercent: NaN, thdDb: NaN,
+      thdPlusNDb: NaN, thdPlusNPercent: NaN,
+      snrDb: NaN, sinad: NaN, harmonics: [],
+    };
   }
   const fmax = freqs[freqs.length - 1];
   const fundIdx = nearestBin(freqs, f0);
   const fundDb = mag[fundIdx];
   const fundLin = Math.pow(10, fundDb / 20);
   const harmonics = [];
-  let sumSq = 0;
+  const harmonicIdx = new Set([fundIdx]);
+  let harmSumSq = 0;
   for (let n = 2; n <= maxHarmonics; n++) {
     const fn = n * f0;
     if (fn > fmax) break;
     const idx = nearestBin(freqs, fn);
+    if (idx === fundIdx) continue;
+    harmonicIdx.add(idx);
     const db = mag[idx];
     const lin = Math.pow(10, db / 20);
-    sumSq += lin * lin;
-    harmonics.push({ n, freq: freqs[idx], mag_db: db, dbc: db - fundDb });
+    harmSumSq += lin * lin;
+    const dbc = db - fundDb;
+    harmonics.push({
+      n,
+      freq: freqs[idx],
+      mag_db: db,
+      dbc,
+      percent: Math.pow(10, dbc / 20) * 100,
+      phase_deg: phaseDegArr && idx < phaseDegArr.length ? phaseDegArr[idx] : NaN,
+    });
   }
-  if (harmonics.length === 0) {
-    return { thdPercent: NaN, thdDb: NaN, sinad: NaN, harmonics: [] };
-  }
-  const thdRatio = Math.sqrt(sumSq) / Math.max(fundLin, 1e-30);
-  const thdPercent = thdRatio * 100;
-  const thdDb = 20 * Math.log10(Math.max(thdRatio, 1e-30));
-  // Approximate SINAD as fundamental / (harmonics + noise floor proxy). We
-  // use the median bin power excluding the fundamental as a noise estimate.
-  let noiseLinSq = 0, noiseCount = 0;
+
+  // Σ everything-but-fundamental — used for THD+N and SINAD.
+  let totalSqExFund = 0;
+  let noiseSqExHarm = 0;       // Σ ex-fundamental, ex-harmonics — for SNR
+  let noiseCountExHarm = 0;
   for (let i = 1; i < mag.length; i++) {
-    if (i === fundIdx) continue;
     const lin = Math.pow(10, mag[i] / 20);
-    noiseLinSq += lin * lin;
-    noiseCount++;
+    if (i !== fundIdx) totalSqExFund += lin * lin;
+    if (!harmonicIdx.has(i)) {
+      noiseSqExHarm += lin * lin;
+      noiseCountExHarm++;
+    }
   }
-  const noiseRMS = noiseCount > 0 ? Math.sqrt(noiseLinSq / noiseCount) : 0;
-  const sinadRatio = fundLin / Math.max(noiseRMS, 1e-30);
-  const sinad = 20 * Math.log10(Math.max(sinadRatio, 1e-30));
-  return { thdPercent, thdDb, sinad, harmonics };
+
+  const thdRatio = harmonics.length > 0
+    ? Math.sqrt(harmSumSq) / Math.max(fundLin, 1e-30)
+    : NaN;
+  const thdPercent = thdRatio * 100;
+  const thdDb = Number.isFinite(thdRatio)
+    ? 20 * Math.log10(Math.max(thdRatio, 1e-30))
+    : NaN;
+
+  const thdNRatio = totalSqExFund > 0
+    ? Math.sqrt(totalSqExFund) / Math.max(fundLin, 1e-30)
+    : NaN;
+  const thdPlusNDb = Number.isFinite(thdNRatio)
+    ? 20 * Math.log10(Math.max(thdNRatio, 1e-30))
+    : NaN;
+  const thdPlusNPercent = thdNRatio * 100;
+
+  // SNR: fundamental / RMS noise (ex-harmonics). We average over the bin
+  // count so a denser sweep doesn't inflate the noise sum.
+  const noiseRMSExHarm = noiseCountExHarm > 0
+    ? Math.sqrt(noiseSqExHarm / noiseCountExHarm) : 0;
+  const snrRatio = fundLin / Math.max(noiseRMSExHarm, 1e-30);
+  const snrDb = noiseRMSExHarm > 0
+    ? 20 * Math.log10(Math.max(snrRatio, 1e-30))
+    : NaN;
+
+  // SINAD uses the same RMS-over-bins convention as before but now with the
+  // total (harmonics + noise) energy in the denominator. Matches the
+  // canonical SINAD = signal / (signal + noise + distortion - signal).
+  const sinadRMS = (mag.length - 1) > 0
+    ? Math.sqrt(totalSqExFund / Math.max(mag.length - 1, 1)) : 0;
+  const sinadRatio = fundLin / Math.max(sinadRMS, 1e-30);
+  const sinad = sinadRMS > 0
+    ? 20 * Math.log10(Math.max(sinadRatio, 1e-30))
+    : NaN;
+
+  return {
+    thdPercent, thdDb,
+    thdPlusNDb, thdPlusNPercent,
+    snrDb, sinad,
+    harmonics,
+  };
 }
 
 /**

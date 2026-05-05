@@ -1,0 +1,15 @@
+kind: subcircuit
+ref_prefix: X
+symbol: V
+group: Tubes
+description: 12AU7 dual-triode (Norman Koren model)
+node_count: 3
+node_names: [P, G, K]
+library: tubes_koren.lib
+model_name: 12AU7
+symbol_svg: |
+  <circle cx="11" cy="8" r="6" fill="none"/>
+  <path d="M11 2 V0 M7 5 H15 M11 14 V16"/>
+  <path d="M5 8 H17" stroke-dasharray="1.5 1.2"/>
+inspector_fields:
+  - { name: model, label: Model, type: text, default: 12AU7 }

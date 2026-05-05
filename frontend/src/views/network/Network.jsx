@@ -9,11 +9,12 @@
 // twice. Spectrum keeps Plotly because of its native log axis + marker UX.
 
 import { useEffect, useMemo } from 'react';
-import { useCircuit, useNetwork, defaultProbe, pivotComplexFrames } from '../../store/index.js';
+import { useCircuit, useNetwork, useUI, defaultProbe, pivotComplexFrames } from '../../store/index.js';
 import BodePlot from './BodePlot.jsx';
 import NetworkControls from './NetworkControls.jsx';
 import NetworkReadout from './NetworkReadout.jsx';
-import { findPeak, bandwidth, unityGainCrossover, phaseMargin, groupDelay, wrapPhase } from '../../lib/frequency.js';
+import Splitter from '../common/Splitter.jsx';
+import { findPeak, bandwidth, unityGainCrossover, phaseMargin, gainMargin, groupDelay, wrapPhase } from '../../lib/frequency.js';
 
 export default function Network() {
   const circuit = useCircuit((s) => s.circuit);
@@ -21,6 +22,8 @@ export default function Network() {
   const status = useNetwork((s) => s.status);
   const config = useNetwork((s) => s.config);
   const setConfig = useNetwork((s) => s.setConfig);
+  const controlPanelWidth = useUI((s) => s.controlPanelWidth);
+  const setControlPanelWidth = useUI((s) => s.setControlPanelWidth);
 
   // Default the output probe to the circuit's first probe whenever the
   // circuit changes and none has been explicitly chosen.
@@ -47,14 +50,19 @@ export default function Network() {
     return out;
   }, [phaseRaw]);
 
-  // Auto-markers — derived once per data update.
+  // Auto-markers — derived once per data update. The `bw40` field uses the
+  // same bandwidth() routine as `bw` but with a 40 dB drop, which is the
+  // canonical "filter skirt" the RF/audio world quotes for stop-band reach.
+  // `gm` is the gain (dB below 0) at the -180° phase crossing.
   const markers = useMemo(() => {
     if (!mag || !phaseRaw || !freqs.length) return null;
     return {
       peak: findPeak(freqs, mag),
       bw: bandwidth(freqs, mag, 3),
+      bw40: bandwidth(freqs, mag, 40),
       unity: unityGainCrossover(freqs, mag),
       pm: phaseMargin(freqs, mag, phaseRaw),
+      gm: gainMargin(freqs, mag, phaseRaw),
     };
   }, [freqs, mag, phaseRaw]);
 
@@ -65,7 +73,7 @@ export default function Network() {
 
   return (
     <div className="spectrum">
-      <div className="spectrum-workspace">
+      <div className="spectrum-workspace" style={{ '--ctrl-width': `${controlPanelWidth}px` }}>
         <div className="spectrum-screen-pane">
           <div className="spectrum-screen network-stack">
             {!circuit && <div className="scope-overlay">No circuit loaded.</div>}
@@ -86,13 +94,15 @@ export default function Network() {
               phase={phaseWrapped}
               tau={tau}
               markers={markers}
+              autoMarkers={config.autoMarkers}
               probe={probe}
             />
           </div>
         </div>
+        <Splitter width={controlPanelWidth} onChange={setControlPanelWidth} />
         <NetworkControls />
       </div>
-      <NetworkReadout markers={markers} probe={probe} />
+      <NetworkReadout markers={markers} probe={probe} autoMarkers={config.autoMarkers} />
     </div>
   );
 }

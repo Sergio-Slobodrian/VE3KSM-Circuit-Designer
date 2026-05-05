@@ -1,7 +1,5 @@
 // Side panel for the Scope tab: per-channel probe + V/div + coupling + invert,
-// the time-base controls, and the Run/Stop button. Trigger and math are spec'd
-// in DESIGN.md §6.2 but deferred to milestone 6+ — the static rows below are
-// placeholders so the panel matches the mockup density.
+// math channels (m11), the time-base controls, and the Run/Stop button.
 //
 // V/div and time/div use a 1-2-5 sequence so adjusting them feels like a real
 // scope. The buttons step the current value through the sequence rather than
@@ -27,10 +25,12 @@ function step125(value, dir) {
   return STEP_125[ni] * base;
 }
 
-export default function ChannelPanel({ derived }) {
+export default function ChannelPanel({ derived, mathDerived }) {
   const circuit = useCircuit((s) => s.circuit);
   const channels = useSimulation((s) => s.channels);
   const setChannel = useSimulation((s) => s.setChannel);
+  const mathChannels = useSimulation((s) => s.mathChannels);
+  const setMathChannel = useSimulation((s) => s.setMathChannel);
   const timebase = useSimulation((s) => s.timebase);
   const setTimebase = useSimulation((s) => s.setTimebase);
   const status = useSimulation((s) => s.status);
@@ -85,6 +85,22 @@ export default function ChannelPanel({ derived }) {
             ch={ch}
             probes={probes}
             onChange={(patch) => setChannel(i, patch)}
+          />
+        ))}
+      </div>
+
+      <div className="scope-section">
+        <h4>Math (m11)</h4>
+        <div className="scope-math-help">
+          <span>vars: CH1..CH4 · ops: + − * /</span>
+          <span>wrap: <code>INT(…)</code> <code>DIFF(…)</code></span>
+        </div>
+        {mathChannels.map((m, i) => (
+          <MathRow
+            key={m.id}
+            m={m}
+            error={mathDerived?.[i]?.error || null}
+            onChange={(patch) => setMathChannel(i, patch)}
           />
         ))}
       </div>
@@ -171,6 +187,61 @@ function ChannelRow({ ch, probes, onChange }) {
           inv
         </button>
       </div>
+    </div>
+  );
+}
+
+function MathRow({ m, error, onChange }) {
+  return (
+    <div className="scope-ch scope-math">
+      <div className="scope-ch-head">
+        <span className="ch-dot" style={{ background: m.color, opacity: m.enabled ? 1 : 0.35 }} />
+        <span className="ch-name">{m.label}</span>
+        <input
+          type="text"
+          className="ch-probe ch-math-expr"
+          placeholder="e.g. CH1 - CH2"
+          value={m.expr}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          onChange={(ev) => onChange({ expr: ev.target.value })}
+        />
+      </div>
+      <div className="scope-ch-row">
+        <Stepper
+          value={formatEng(m.vDiv, 'V')}
+          onUp={() => onChange({ vDiv: step125(m.vDiv, +1) })}
+          onDown={() => onChange({ vDiv: step125(m.vDiv, -1) })}
+        />
+        <select
+          className="ch-coupling"
+          value={m.coupling}
+          onChange={(ev) => onChange({ coupling: ev.target.value })}
+          title="DC: pass through · AC: subtract mean · GND: zero"
+        >
+          <option value="dc">DC</option>
+          <option value="ac">AC</option>
+          <option value="gnd">GND</option>
+        </select>
+        <button
+          type="button"
+          className={`ch-invert ${m.invert ? 'is-on' : ''}`}
+          onClick={() => onChange({ invert: !m.invert })}
+          title="Invert"
+        >
+          inv
+        </button>
+        <button
+          type="button"
+          className={`ch-invert ${m.enabled ? 'is-on' : ''}`}
+          onClick={() => onChange({ enabled: !m.enabled })}
+          title={m.enabled ? 'disable math channel' : 'enable math channel'}
+        >
+          {m.enabled ? 'on' : 'off'}
+        </button>
+      </div>
+      {error && <div className="scope-math-err" title={error}>parse: {error}</div>}
     </div>
   );
 }

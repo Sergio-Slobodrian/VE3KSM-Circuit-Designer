@@ -142,6 +142,98 @@ export function autoVDiv(vppVal) {
 }
 
 /**
+ * Compile a math channel expression for the Scope tab. Math channels combine
+ * scope channels (CH1..CH4) with arithmetic and an optional outer transform:
+ *
+ *   CH1 - CH2          difference (in volts)
+ *   CH1 * CH2          product
+ *   CH1 / CH2          ratio
+ *   (CH1 + CH2) / 2    sum / average
+ *   INT(CH1)           cumulative trapezoidal integral (V·s)
+ *   DIFF(CH1)          central-difference derivative (V/s)
+ *
+ * The compiler returns `{ fn, mode }` on success or `{ error }` on failure.
+ * `mode` is 'pointwise', 'integrate', or 'differentiate'. The `fn` is built
+ * via the Function constructor with a fixed parameter list — there is no
+ * access to the global `window` object, but JS keywords like `for` are still
+ * legal. This is a local-only tool; the threat model is "user typo crashes
+ * the eval", not "user uploads a malicious expression."
+ */
+export function compileMathExpression(expr) {
+  if (typeof expr !== 'string' || !expr.trim()) {
+    return { error: 'empty expression' };
+  }
+  let body = expr.trim();
+  let mode = 'pointwise';
+  const intMatch = body.match(/^INT\((.*)\)$/i);
+  const diffMatch = body.match(/^DIFF\((.*)\)$/i);
+  if (intMatch)       { mode = 'integrate';     body = intMatch[1].trim(); }
+  else if (diffMatch) { mode = 'differentiate'; body = diffMatch[1].trim(); }
+  if (!body) return { error: 'empty inner expression' };
+  let fn;
+  try {
+    // eslint-disable-next-line no-new-func
+    fn = new Function('CH1', 'CH2', 'CH3', 'CH4', 't', 'i', 'Math', `return (${body});`);
+  } catch (err) {
+    return { error: err.message || 'parse error' };
+  }
+  return { fn, mode };
+}
+
+/**
+ * Evaluate a compiled math expression sample-by-sample over the given channel
+ * data. `chYs` is an array of four optional Float64Array source channels; pass
+ * `null` (or an empty array) for channels not bound to a probe and the math
+ * function will see `0` for that variable.
+ *
+ * Returns a Float64Array parallel to xs. Integrate / differentiate are applied
+ * after the per-sample pass, so e.g. INT(CH1*CH2) integrates the product.
+ */
+export function evaluateMathChannel(compiled, chYs, xs) {
+  if (!compiled || !compiled.fn) return new Float64Array(0);
+  const n = xs?.length || 0;
+  const raw = new Float64Array(n);
+  const c1 = chYs?.[0] ?? null;
+  const c2 = chYs?.[1] ?? null;
+  const c3 = chYs?.[2] ?? null;
+  const c4 = chYs?.[3] ?? null;
+  for (let i = 0; i < n; i++) {
+    let v;
+    try {
+      v = compiled.fn(
+        c1?.[i] ?? 0, c2?.[i] ?? 0, c3?.[i] ?? 0, c4?.[i] ?? 0,
+        xs[i], i, Math,
+      );
+    } catch {
+      v = NaN;
+    }
+    raw[i] = typeof v === 'number' ? v : NaN;
+  }
+  if (compiled.mode === 'integrate') {
+    const out = new Float64Array(n);
+    for (let i = 1; i < n; i++) {
+      const dt = xs[i] - xs[i - 1];
+      const a = Number.isFinite(raw[i - 1]) ? raw[i - 1] : 0;
+      const b = Number.isFinite(raw[i]) ? raw[i] : 0;
+      out[i] = out[i - 1] + ((a + b) / 2) * dt;
+    }
+    return out;
+  }
+  if (compiled.mode === 'differentiate') {
+    const out = new Float64Array(n);
+    if (n >= 2) {
+      out[0]     = (raw[1] - raw[0]) / Math.max(xs[1] - xs[0], 1e-30);
+      out[n - 1] = (raw[n - 1] - raw[n - 2]) / Math.max(xs[n - 1] - xs[n - 2], 1e-30);
+    }
+    for (let i = 1; i < n - 1; i++) {
+      out[i] = (raw[i + 1] - raw[i - 1]) / Math.max(xs[i + 1] - xs[i - 1], 1e-30);
+    }
+    return out;
+  }
+  return raw;
+}
+
+/**
  * Pick a "round" time/division target so the captured run fills the screen
  * cleanly (10 divisions wide). Snaps 1-2-5.
  */

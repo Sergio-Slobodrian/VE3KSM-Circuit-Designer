@@ -93,6 +93,12 @@ func Emit(c *circuit.Circuit, w io.Writer) error {
 
 	sb.WriteString(".END\n")
 
+	// Two trailing *+ comment blocks: layout metadata first (per DESIGN.md
+	// §5.2), then the m10 waveform metadata for high-level signal-generator
+	// sources whose lowered SPICE form (PULSE/PWL) doesn't carry the
+	// inspector-facing parameters. Both blocks survive ngspice because they
+	// sit past .END; both blocks survive a round-trip because the parser
+	// recognises the `*+ <ref> ...` prefix in either order.
 	hasLayout := false
 	for _, comp := range c.Components {
 		if comp.Layout != (circuit.Layout{}) {
@@ -113,6 +119,25 @@ func Emit(c *circuit.Circuit, w io.Writer) error {
 			}
 			fmt.Fprintf(&sb, "*+ %s pos=(%d,%d) rot=%d mirror=%s\n",
 				comp.Ref, l.X, l.Y, l.Rot, mirror)
+		}
+	}
+
+	hasWaveformMeta := false
+	for _, comp := range c.Components {
+		if line := emitWaveformMeta(comp.Ref, comp.Source); line != "" {
+			hasWaveformMeta = true
+			break
+		}
+	}
+	if hasWaveformMeta {
+		sb.WriteString("\n")
+		for _, comp := range c.Components {
+			line := emitWaveformMeta(comp.Ref, comp.Source)
+			if line == "" {
+				continue
+			}
+			sb.WriteString(line)
+			sb.WriteString("\n")
 		}
 	}
 
@@ -164,19 +189,21 @@ func emitSourceSpec(s *circuit.SourceSpec) string {
 	// accepts any order but the emitter is opinionated to keep round-tripped
 	// netlists stable.
 	parts := []string{}
-	switch s.Mode {
-	case "dc":
+	mode := strings.ToLower(s.Mode)
+	switch mode {
+	case ModeDC:
 		parts = append(parts, "DC "+s.Params["value"])
-	case "sin":
-		// SIN can carry a DC offset when round-tripped from a "DC x AC y SIN(...)"
-		// source — we stashed it in Params["dc"] then; surface it back as a
-		// leading DC token so the engine sees the original bias.
+	case ModeAC:
+		// Pure AC stimulus — no DC, no transient. Nothing to emit here; the
+		// AC token is appended below.
+	default:
+		// Every transient mode (sin/pulse/sffm/synthesized) may also carry a
+		// DC bias in Params["dc"]; ngspice treats it as the source's quiescent
+		// value under transient analysis. Preserve it so a round-trip through
+		// "DC x AC y SIN(...)" survives.
 		if dc, ok := s.Params["dc"]; ok && dc != "" {
 			parts = append(parts, "DC "+dc)
 		}
-	case "ac":
-		// Pure AC stimulus — no DC, no transient. Nothing to emit here; the
-		// AC token is appended below.
 	}
 	if s.AC != nil {
 		ac := "AC " + s.AC.Magnitude
@@ -185,19 +212,15 @@ func emitSourceSpec(s *circuit.SourceSpec) string {
 		}
 		parts = append(parts, ac)
 	}
-	if s.Mode == "sin" {
-		// Emit SIN args in canonical order; stop at first missing key so the
-		// re-parse produces the same Params map.
-		names := []string{"offset", "ampl", "freq", "td", "damp", "phase"}
-		var args []string
-		for _, n := range names {
-			v, ok := s.Params[n]
-			if !ok {
-				break
-			}
-			args = append(args, v)
-		}
-		parts = append(parts, "SIN("+strings.Join(args, " ")+")")
+	transient, _, err := lowerSource(s)
+	if err != nil {
+		// Fall back to a comment-shaped token so the emitter never crashes;
+		// the netlist will fail to simulate, which surfaces the bug
+		// immediately. The error path is exercised by waveforms_test.
+		transient = "; lowering error: " + err.Error()
+	}
+	if transient != "" {
+		parts = append(parts, transient)
 	}
 	return strings.Join(parts, " ")
 }

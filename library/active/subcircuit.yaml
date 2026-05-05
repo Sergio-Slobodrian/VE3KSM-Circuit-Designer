@@ -1,0 +1,12 @@
+kind: subcircuit
+ref_prefix: X
+symbol: X
+group: Active
+description: Generic subcircuit instance (.SUBCKT model)
+node_count: 3
+node_names: [a, b, c]
+symbol_svg: |
+  <rect x="2" y="2" width="20" height="14" fill="none"/>
+  <path d="M5 9 H19" stroke-dasharray="1.5 1.2"/>
+inspector_fields:
+  - { name: model, label: Model, type: text }
