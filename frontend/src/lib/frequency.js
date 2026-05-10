@@ -285,6 +285,97 @@ export function thd(freqs, mag, f0, maxHarmonics = 10, phaseDegArr = null) {
 }
 
 /**
+ * Convert a (mag in dB, phase in degrees) sample to a complex number {re, im}.
+ * Handles the -300 dB sentinel the engine emits for silent bins by clamping the
+ * magnitude near zero rather than ringing through Math.pow.
+ */
+export function complexFromMagDbPhase(magDb, phaseDeg) {
+  if (!Number.isFinite(magDb) || !Number.isFinite(phaseDeg)) {
+    return { re: NaN, im: NaN };
+  }
+  const mag = Math.pow(10, magDb / 20);
+  const rad = phaseDeg * Math.PI / 180;
+  return { re: mag * Math.cos(rad), im: mag * Math.sin(rad) };
+}
+
+/** Complex division a / b. Returns NaN parts when |b| == 0 or inputs are NaN. */
+export function complexDiv(a, b) {
+  const denom = b.re * b.re + b.im * b.im;
+  if (!Number.isFinite(denom) || denom === 0) return { re: NaN, im: NaN };
+  return {
+    re: (a.re * b.re + a.im * b.im) / denom,
+    im: (a.im * b.re - a.re * b.im) / denom,
+  };
+}
+
+/**
+ * S11 reflection coefficient from a complex load impedance Zin and reference
+ * impedance Z₀ (real, e.g. 50 Ω). Returns:
+ *   { re, im, mag, mag_db, phase_deg, vswr, return_loss_db }
+ *
+ * Uses the standard scattering definition Γ = (Zin − Z₀)/(Zin + Z₀). VSWR is
+ * (1+|Γ|)/(1−|Γ|), clamped to Infinity at perfect reflection. Return loss is
+ * −20·log10|Γ|; positive numbers mean less reflected power (well-matched load).
+ */
+export function s11FromZin(zin, z0) {
+  if (!(z0 > 0)) return null;
+  const num = { re: zin.re - z0, im: zin.im };
+  const den = { re: zin.re + z0, im: zin.im };
+  const g = complexDiv(num, den);
+  const mag = Math.hypot(g.re, g.im);
+  const mag_db = mag > 0 ? 20 * Math.log10(mag) : -Infinity;
+  const phase_deg = Math.atan2(g.im, g.re) * 180 / Math.PI;
+  const vswr = mag >= 1 ? Infinity : (1 + mag) / Math.max(1 - mag, 1e-30);
+  const return_loss_db = -mag_db; // positive when |Γ|<1
+  return { re: g.re, im: g.im, mag, mag_db, phase_deg, vswr, return_loss_db };
+}
+
+/**
+ * Compute the per-bin Smith-chart trace from port-1 V and I arrays. Returns an
+ * object of parallel Float64Arrays the SmithChart component plots directly:
+ *
+ *   { freqs, gammaRe, gammaIm, gammaMag, vswr, returnLossDb,
+ *     zinRe, zinIm }
+ *
+ * Inputs are the raw mag_db / phase_deg arrays the backend emits for the
+ * synthetic `port1.v` and `port1.i` keys. Returns null when any input is
+ * missing or lengths disagree (caller treats that as "no S-parameter data").
+ */
+export function smithTrace(freqs, port, z0) {
+  if (!freqs || !port) return null;
+  const { vMag, vPhase, iMag, iPhase } = port;
+  const n = freqs.length;
+  if (!vMag || !vPhase || !iMag || !iPhase) return null;
+  if (vMag.length !== n || iMag.length !== n) return null;
+  const gammaRe = new Float64Array(n);
+  const gammaIm = new Float64Array(n);
+  const gammaMag = new Float64Array(n);
+  const vswrArr = new Float64Array(n);
+  const rlArr = new Float64Array(n);
+  const zinRe = new Float64Array(n);
+  const zinIm = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const v = complexFromMagDbPhase(vMag[i], vPhase[i]);
+    const cur = complexFromMagDbPhase(iMag[i], iPhase[i]);
+    const z = complexDiv(v, cur);
+    zinRe[i] = z.re;
+    zinIm[i] = z.im;
+    const s = s11FromZin(z, z0);
+    if (!s) {
+      gammaRe[i] = NaN; gammaIm[i] = NaN; gammaMag[i] = NaN;
+      vswrArr[i] = NaN; rlArr[i] = NaN;
+      continue;
+    }
+    gammaRe[i] = s.re;
+    gammaIm[i] = s.im;
+    gammaMag[i] = s.mag;
+    vswrArr[i] = s.vswr;
+    rlArr[i] = s.return_loss_db;
+  }
+  return { freqs, gammaRe, gammaIm, gammaMag, vswr: vswrArr, returnLossDb: rlArr, zinRe, zinIm };
+}
+
+/**
  * Format a frequency with appropriate engineering suffix.
  * 1234 → "1.23 kHz"; 12.5e6 → "12.5 MHz".
  */
@@ -302,4 +393,27 @@ export function formatHz(v) {
 export function formatDb(v) {
   if (!Number.isFinite(v)) return '—';
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)} dB`;
+}
+
+/**
+ * Format a complex impedance Zin = R + jX as a short engineering string,
+ * e.g. "47.2 + j 12.5 Ω". Falls back to "—" on NaN/Infinity so the readout
+ * doesn't render garbage for empty bins.
+ */
+export function formatImpedance(re, im) {
+  if (!Number.isFinite(re) || !Number.isFinite(im)) return '—';
+  const r = Math.abs(re) >= 1000 ? `${(re / 1000).toFixed(2)}k` : re.toFixed(1);
+  const x = Math.abs(im) >= 1000 ? `${(Math.abs(im) / 1000).toFixed(2)}k` : Math.abs(im).toFixed(1);
+  const sign = im >= 0 ? '+' : '−';
+  return `${r} ${sign} j${x} Ω`;
+}
+
+/**
+ * Format a VSWR ratio. Reads as "1.23:1" for the well-matched case; clamps to
+ * "∞:1" once |Γ|≥1 (perfect reflection / open or shorted port).
+ */
+export function formatVSWR(v) {
+  if (!Number.isFinite(v)) return v > 0 ? '∞:1' : '—';
+  if (v >= 999) return '∞:1';
+  return `${v.toFixed(2)}:1`;
 }

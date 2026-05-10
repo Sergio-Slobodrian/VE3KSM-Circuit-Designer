@@ -383,6 +383,13 @@ func TestRunPreampAC(t *testing.T) {
 	if _, ok := first.Values["vout:phase_deg"]; !ok {
 		t.Errorf("first frame missing vout:phase_deg; have keys: %v", keysOf(first.Values))
 	}
+	// Milestone 12: AC analysis also emits port-1 voltage and current so the
+	// frontend can derive Zin / S11 / VSWR for the Smith chart.
+	for _, k := range []string{"port1.v:mag_db", "port1.v:phase_deg", "port1.i:mag_db", "port1.i:phase_deg"} {
+		if _, ok := first.Values[k]; !ok {
+			t.Errorf("first frame missing %s; have keys: %v", k, keysOf(first.Values))
+		}
+	}
 
 	if math.IsNaN(voutMagDBAt10kBin) {
 		t.Fatalf("no frame near 10 kHz; sweep didn't cover the band?")

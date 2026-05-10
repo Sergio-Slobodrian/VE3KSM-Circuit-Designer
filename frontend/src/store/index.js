@@ -718,6 +718,26 @@ export function pivotComplexFrames(frames) {
 }
 
 /**
+ * Pull the synthetic `port1.v` and `port1.i` series out of a complex pivot.
+ * The engine emits these for AC analysis (milestone 12) so the Network tab
+ * can derive Zin / S11 / VSWR / Smith trace; they pivot through the regular
+ * `<node>:mag_db|phase_deg` machinery using a synthetic node name that can't
+ * collide with real nodes (real nodes never contain a dot).
+ *
+ * Returns `null` when either V or I is missing — current-source-only sweeps
+ * won't have port-1 vectors and the Network UI gates the Smith chart on this.
+ */
+export function port1FromPivot(pivot) {
+  if (!pivot) return null;
+  const vMag = pivot.mag.get('port1.v');
+  const vPhase = pivot.phase.get('port1.v');
+  const iMag = pivot.mag.get('port1.i');
+  const iPhase = pivot.phase.get('port1.i');
+  if (!vMag || !iMag || !vPhase || !iPhase) return null;
+  return { vMag, vPhase, iMag, iPhase };
+}
+
+/**
  * Default probe pick for spectrum/network: first probe in the circuit, or
  * null when none exist. Reused by the views to seed selection on first load.
  */
@@ -872,6 +892,13 @@ export const useNetwork = create((set, get) => {
       stopHz: 100000,
       probeOut: null,        // probe at port 2 (frontend display only)
       groupDelay: false,     // overlay -dφ/dω on the magnitude plot
+      // Milestone 12: RF/S-parameter view options.
+      // Z0 = reference impedance for S11/VSWR. 50Ω is the radio default;
+      // 75Ω covers video/coax, 600Ω historical audio. The Smith chart
+      // and VSWR readout key off this value.
+      z0: 50,
+      showSmith: true,       // render the S₁₁ Smith inset under the Bode stack
+      showVSWR: false,       // show the S₁₁ readout cells AND overlay VSWR(f) on the Bode magnitude pane
       autoMarkers: {
         minus3dB: true, peak: true, unityGain: true, phaseMargin: true,
         minus40dB: false, gainMargin: true,

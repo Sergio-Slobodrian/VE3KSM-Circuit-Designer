@@ -9,12 +9,13 @@
 // twice. Spectrum keeps Plotly because of its native log axis + marker UX.
 
 import { useEffect, useMemo } from 'react';
-import { useCircuit, useNetwork, useUI, defaultProbe, pivotComplexFrames } from '../../store/index.js';
+import { useCircuit, useNetwork, useUI, defaultProbe, pivotComplexFrames, port1FromPivot } from '../../store/index.js';
 import BodePlot from './BodePlot.jsx';
 import NetworkControls from './NetworkControls.jsx';
 import NetworkReadout from './NetworkReadout.jsx';
+import SmithChart from './SmithChart.jsx';
 import Splitter from '../common/Splitter.jsx';
-import { findPeak, bandwidth, unityGainCrossover, phaseMargin, gainMargin, groupDelay, wrapPhase } from '../../lib/frequency.js';
+import { findPeak, bandwidth, unityGainCrossover, phaseMargin, gainMargin, groupDelay, wrapPhase, smithTrace } from '../../lib/frequency.js';
 
 export default function Network() {
   const circuit = useCircuit((s) => s.circuit);
@@ -71,6 +72,17 @@ export default function Network() {
     return groupDelay(freqs, phaseRaw);
   }, [freqs, phaseRaw, config.groupDelay]);
 
+  // Milestone 12: derive S11 / VSWR / Zin from the engine's port-1 V & I keys.
+  // The trace is null when AC analysis hasn't run (or on a current-driven
+  // circuit with no voltage source) — both the Smith inset and the readout
+  // gate themselves on the trace being non-null, so the Bode-only audio
+  // workflow is unaffected.
+  const port1 = useMemo(() => port1FromPivot(pivot), [pivot]);
+  const smith = useMemo(() => {
+    if (!port1 || !freqs.length || !(config.z0 > 0)) return null;
+    return smithTrace(freqs, port1, config.z0);
+  }, [port1, freqs, config.z0]);
+
   return (
     <div className="spectrum">
       <div className="spectrum-workspace" style={{ '--ctrl-width': `${controlPanelWidth}px` }}>
@@ -93,6 +105,8 @@ export default function Network() {
               mag={mag}
               phase={phaseWrapped}
               tau={tau}
+              vswr={smith?.vswr ?? null}
+              showVSWR={config.showVSWR}
               markers={markers}
               autoMarkers={config.autoMarkers}
               probe={probe}
@@ -102,7 +116,16 @@ export default function Network() {
         <Splitter width={controlPanelWidth} onChange={setControlPanelWidth} />
         <NetworkControls />
       </div>
-      <NetworkReadout markers={markers} probe={probe} autoMarkers={config.autoMarkers} />
+      <NetworkReadout
+        markers={markers}
+        probe={probe}
+        autoMarkers={config.autoMarkers}
+        smith={smith}
+        showVSWR={config.showVSWR}
+        z0={config.z0}
+      >
+        {config.showSmith && smith && <SmithChart trace={smith} z0={config.z0} />}
+      </NetworkReadout>
     </div>
   );
 }

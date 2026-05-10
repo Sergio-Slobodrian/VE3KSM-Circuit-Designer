@@ -356,10 +356,17 @@ func planAnalysis(c *circuit.Circuit, a circuit.Analysis) (analysisPlan, error) 
 		}, nil
 	case "ac":
 		commands := acStimulusCommands(c)
+		// `save all` forces ngspice to retain branch currents (e.g. v1#branch)
+		// in addition to the default node voltages. Milestone 12 needs the
+		// port-1 stimulus current to derive Zin / S11 — without this `save`,
+		// `i(v1)` is "no such vector" once wrdata runs.
+		commands = append(commands, "save all")
 		commands = append(commands, strings.TrimSpace("ac "+strings.Join(a.Args, " ")))
+		vectors := complexProbeVectors(c, false)
+		vectors = append(vectors, portStimulusVectors(c)...)
 		return analysisPlan{
 			commands: commands,
-			vectors:  complexProbeVectors(c, false),
+			vectors:  vectors,
 		}, nil
 	case "spectrum":
 		settings := []string{}
@@ -449,6 +456,40 @@ func complexProbeVectors(c *circuit.Circuit, _ bool) []vectorRequest {
 		)
 	}
 	return out
+}
+
+// portStimulusVectors returns the four vectors needed for input-port S-parameter
+// derivation in AC analysis: voltage and current at port 1 (the first voltage
+// source in the circuit). The frontend computes Zin = V/I from these and from
+// there S11 = (Zin − Z₀)/(Zin + Z₀), VSWR, and the Smith trace (DESIGN.md §6.4).
+//
+// The keys use synthetic node names "port1.v" and "port1.i" so they pivot
+// through the existing complex-frame helper (`<node>:mag_db|phase_deg`) without
+// colliding with any circuit node — real netlist nodes never contain a dot.
+//
+// Sign convention: ngspice's i(Vsrc) is the current that flows from + to −
+// inside the source (i.e. out of the + terminal of the source, into the
+// external circuit, returns negative). We negate so port-1 current is the
+// load-current flowing INTO the network from the source's + terminal, which
+// makes Zin = V/I a positive impedance for passive loads.
+//
+// Returns nil when no voltage source exists (e.g. current-only sources) — the
+// frontend gates Smith/VSWR readouts on the presence of these keys.
+func portStimulusVectors(c *circuit.Circuit) []vectorRequest {
+	for _, comp := range c.Components {
+		if comp.Kind != "voltage_source" || len(comp.Nodes) < 2 {
+			continue
+		}
+		posNode := comp.Nodes[0]
+		ref := strings.ToLower(comp.Ref)
+		return []vectorRequest{
+			{Spice: fmt.Sprintf("db(mag(v(%s)) + 1e-30)", posNode), Key: "port1.v:mag_db"},
+			{Spice: fmt.Sprintf("cph(v(%s)) * 180 / pi", posNode), Key: "port1.v:phase_deg"},
+			{Spice: fmt.Sprintf("db(mag(-i(%s)) + 1e-30)", ref), Key: "port1.i:mag_db"},
+			{Spice: fmt.Sprintf("cph(-i(%s)) * 180 / pi", ref), Key: "port1.i:phase_deg"},
+		}
+	}
+	return nil
 }
 
 // acStimulusCommands returns `alter` commands that give every voltage source

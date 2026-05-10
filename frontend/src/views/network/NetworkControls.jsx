@@ -120,6 +120,40 @@ export default function NetworkControls() {
       </div>
 
       <div className="scope-section">
+        <h4>RF · S-parameters</h4>
+        <Row label="Z₀">
+          <input
+            type="number"
+            min={1}
+            max={10000}
+            value={config.z0}
+            onChange={(ev) => setConfig({ z0: Math.max(1, Number(ev.target.value) || 50) })}
+            className="ch-coupling"
+            style={{ width: 60 }}
+          />
+          <span className="muted">Ω</span>
+        </Row>
+        <Row label="Smith chart">
+          <button
+            type="button"
+            className={`ch-invert ${config.showSmith ? 'is-on' : ''}`}
+            onClick={() => setConfig({ showSmith: !config.showSmith })}
+          >
+            {config.showSmith ? 'on' : 'off'}
+          </button>
+        </Row>
+        <Row label="VSWR readout">
+          <button
+            type="button"
+            className={`ch-invert ${config.showVSWR ? 'is-on' : ''}`}
+            onClick={() => setConfig({ showVSWR: !config.showVSWR })}
+          >
+            {config.showVSWR ? 'on' : 'off'}
+          </button>
+        </Row>
+      </div>
+
+      <div className="scope-section">
         <h4>Auto markers</h4>
         {Object.entries({
           minus3dB: '−3 dB',

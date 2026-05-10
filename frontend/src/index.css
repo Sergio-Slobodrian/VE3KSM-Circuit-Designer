@@ -957,6 +957,56 @@ kbd {
 .bode-pane .u-grid line { stroke: #1a2230; }
 .bode-pane .u-cursor-pt { display: none; }
 
+/* Milestone 12 — Smith chart inset.
+   The Network analyzer's bottom strip becomes a flex row (stats on the left,
+   Smith inset on the right) when S-parameter data is present. The Smith pane
+   uses the same dark-screen background as the Bode plot so the two panels
+   read as one continuous instrument view. */
+
+.network-readout {
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+.network-readout .meas-stats {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  min-width: 0;
+}
+.meas-rf { border-left-color: #f5b840; }
+.meas-rf .meas-head { color: #f5b840; }
+
+.smith-pane {
+  flex-shrink: 0;
+  width: 168px;
+  background: var(--bg-screen);
+  border: 0.5px solid #1a1f2a;
+  border-radius: 4px;
+  padding: 7px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.smith-pane .smith-svg { display: block; width: 100%; height: auto; }
+.smith-head {
+  font-size: 9.5px;
+  color: #5fa896;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  display: flex;
+  justify-content: space-between;
+}
+.smith-head em { color: #b3c5c0; font-style: normal; }
+.smith-foot {
+  font-size: 9px;
+  color: #5fa896;
+  font-family: var(--font-mono);
+  display: flex;
+  justify-content: space-between;
+}
+
 /* Status bar ------------------------ */
 
 .statusbar {
