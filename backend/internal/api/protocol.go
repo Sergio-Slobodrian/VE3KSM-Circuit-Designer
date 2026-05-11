@@ -140,13 +140,27 @@ type LibraryImportPayload struct {
 }
 
 // LibraryImportResultPayload is the response form of an OpLibraryImport
-// request. LibFile is the basename the server stored the .lib under (also
-// what the client should add to Circuit.Libraries when instantiating one of
-// the imported subcircuits). Imported is the freshly-discovered palette
-// entries — a subset of what the next library.list call will return.
+// request. LibFile is the basename the server stored the body under (.lib for
+// SPICE library uploads, .asy for symbol uploads, the archive basename for
+// zip uploads). Imported is the freshly-discovered palette entries —
+// populated for .lib uploads (and the .lib portion of zip uploads). Updated
+// is the set of pre-existing entries whose symbol geometry was enriched in
+// place. Warnings carries per-file ingest failures from archive uploads —
+// the importer logs them rather than aborting so a single bad .asy doesn't
+// reject a 700-file vendor pack.
 type LibraryImportResultPayload struct {
-	LibFile  string             `json:"lib_file"`
-	Imported []LibraryComponent `json:"imported"`
+	LibFile  string                       `json:"lib_file"`
+	Imported []LibraryComponent           `json:"imported"`
+	Updated  []LibraryComponent           `json:"updated,omitempty"`
+	Warnings []LibraryImportWarning       `json:"warnings,omitempty"`
+}
+
+// LibraryImportWarning is one per-file ingest failure encountered during a
+// zip-archive import. The frontend banner surfaces the count + first few
+// entries so the user can spot a malformed file.
+type LibraryImportWarning struct {
+	File   string `json:"file"`
+	Reason string `json:"reason"`
 }
 
 // LibraryComponent is one entry in a library listing. The shape mirrors the
@@ -165,6 +179,49 @@ type LibraryComponent struct {
 	Library         string                  `json:"library,omitempty"`
 	ModelName       string                  `json:"model_name,omitempty"`
 	InspectorFields []LibraryInspectorField `json:"inspector_fields,omitempty"`
+	// SymbolDef is the structured rendering payload (bbox + pins + SVG body)
+	// produced by the .asy converter. When present, the frontend prefers it
+	// over the flat SymbolSVG for palette icons (and in later milestones, for
+	// canvas rendering too). The shape is a verbatim mirror of
+	// library.SymbolDef so both ends agree on JSON tags.
+	SymbolDef *LibrarySymbolDef `json:"symbol_def,omitempty"`
+}
+
+// LibrarySymbolDef is the API mirror of library.SymbolDef. Defining a parallel
+// type keeps the api package free of an internal/library import for primitive
+// payloads (the toAPIComponent adapter does the copy).
+type LibrarySymbolDef struct {
+	BBox        LibrarySymbolRect  `json:"bbox"`
+	Origin      LibrarySymbolPoint `json:"origin"`
+	Pins        []LibrarySymbolPin `json:"pins"`
+	Body        string             `json:"body"`
+	Description string             `json:"description,omitempty"`
+	ModelFile   string             `json:"model_file,omitempty"`
+	SpiceModel  string             `json:"spice_model,omitempty"`
+	Source      string             `json:"source,omitempty"`
+}
+
+// LibrarySymbolRect is the visible halo bbox for a structured symbol.
+type LibrarySymbolRect struct {
+	W float64 `json:"w"`
+	H float64 `json:"h"`
+}
+
+// LibrarySymbolPoint is a single (x, y) anchor — used for the symbol origin
+// (where pin coordinates are measured from inside the bbox).
+type LibrarySymbolPoint struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+// LibrarySymbolPin is one pin in canvas-local coordinates with its label-side
+// hint. Pins are pre-sorted by SpiceOrder so index N matches .subckt header
+// position N+1.
+type LibrarySymbolPin struct {
+	Name      string  `json:"name"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	LabelSide string  `json:"label_side,omitempty"`
 }
 
 // LibraryInspectorField is one inspector row; the frontend dispatches on Type

@@ -29,6 +29,12 @@ type Component struct {
 	Library         string           `yaml:"library,omitempty"         json:"library,omitempty"`
 	ModelName       string           `yaml:"model_name,omitempty"      json:"model_name,omitempty"`
 	InspectorFields []InspectorField `yaml:"inspector_fields,omitempty" json:"inspector_fields,omitempty"`
+	// SymbolDef carries structured symbol geometry (bbox/origin/pins/body) for
+	// manifests sourced from LTspice .asy converters. When set it supersedes
+	// the flat SymbolSVG string for icon and (in later phases) canvas
+	// rendering. The YAML key is symbol_def rather than symbol because the
+	// short Symbol string field already owns symbol:.
+	SymbolDef *SymbolDef `yaml:"symbol_def,omitempty" json:"symbol_def,omitempty"`
 	// Source is the relative path of the manifest file on disk, populated by
 	// the loader. Useful for "edit symbol" affordances and tests.
 	Source string `yaml:"-" json:"-"`

@@ -9,8 +9,9 @@
 // kinds; everything that used to live in `value` (the SPICE source spec
 // shorthand) now flows through SourceSpec.Mode + Params.
 
-import { useEffect, useState } from 'react';
-import { useCircuit, useSelection } from '../../store/index.js';
+import { useEffect, useMemo, useState } from 'react';
+import { useCircuit, useSelection, useUI } from '../../store/index.js';
+import { findFamily } from '../../lib/library.js';
 import SignalGenerator from './SignalGenerator.jsx';
 
 const KIND_LABEL = {
@@ -36,6 +37,12 @@ export default function Inspector() {
 
   const primaryRef = selectedRefs[0] ?? null;
   const comp = (circuit?.components || []).find((c) => c.ref === primaryRef);
+
+  // Resolve the component's library family. For multi-variant imports the
+  // family carries a `variants` list which the Model field renders as a
+  // dropdown rather than a freeform text input.
+  const library = useUI((s) => s.library);
+  const family = useMemo(() => (comp ? findFamily(library, comp) : null), [library, comp]);
 
   if (selectedRefs.length === 0) {
     return (
@@ -138,12 +145,28 @@ export default function Inspector() {
 
         {comp.kind === 'subcircuit' && (
           <Field name="Model">
-            <TextInput
-              value={comp.model || ''}
-              placeholder="12AX7"
-              onCommit={(next) => updateComponent(comp.ref, { model: next })}
-              mono
-            />
+            {family && Array.isArray(family.variants) && family.variants.length > 1 ? (
+              <VariantSelect
+                value={comp.model || ''}
+                variants={family.variants}
+                onChange={(next) => {
+                  const v = family.variants.find((x) => x.model_name === next);
+                  const patch = { model: next };
+                  // Carry the variant's default_value too so the component's
+                  // value reflects the selected part — Würth uses this for
+                  // capacitance, Coilcraft for inductance, etc.
+                  if (v?.default_value) patch.value = v.default_value;
+                  updateComponent(comp.ref, patch);
+                }}
+              />
+            ) : (
+              <TextInput
+                value={comp.model || ''}
+                placeholder="12AX7"
+                onCommit={(next) => updateComponent(comp.ref, { model: next })}
+                mono
+              />
+            )}
           </Field>
         )}
 
@@ -263,6 +286,33 @@ function TextInput({ value, onCommit, placeholder, mono }) {
         else if (ev.key === 'Escape') { setDraft(value ?? ''); ev.target.blur(); }
       }}
     />
+  );
+}
+
+// VariantSelect renders a <select> over the family's variants. The label is
+// `${shortLabel} — ${model_name}` so the user sees both the friendly value
+// (e.g. "2.2mF") and the full SPICE model name they're committing to.
+function VariantSelect({ value, variants, onChange }) {
+  return (
+    <select
+      className="insp-input insp-input--mono insp-variant"
+      value={value}
+      onChange={(ev) => onChange(ev.target.value)}
+    >
+      {/* Tolerate legacy values that aren't in the family (e.g. user typed a
+          custom model before the .asy enrichment landed) — show as a
+          dangling option so the value isn't silently overridden. */}
+      {!variants.some((v) => v.model_name === value) && value && (
+        <option value={value}>{value} (custom)</option>
+      )}
+      {variants.map((v) => (
+        <option key={v.model_name} value={v.model_name}>
+          {v.label && v.label !== v.model_name
+            ? `${v.label} — ${v.model_name}`
+            : v.model_name}
+        </option>
+      ))}
+    </select>
   );
 }
 

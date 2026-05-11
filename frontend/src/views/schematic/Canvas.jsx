@@ -14,9 +14,9 @@
 // single pointer-down handler on the SVG resolves the target without each
 // element registering its own listener.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { SYMBOLS, hasSymbol, pinWorld } from '../../symbols/symbols.jsx';
-import { useCircuit, useSelection } from '../../store/index.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveSymbol, pinWorld } from '../../symbols/symbols.jsx';
+import { useCircuit, useSelection, useUI } from '../../store/index.js';
 import { circuitBounds, routeWires } from './wires.js';
 import {
   snap, eventToWorld, findHit, normalizeRect, rectContains,
@@ -46,6 +46,13 @@ export default function Canvas() {
   const setSelection = useSelection((s) => s.setSelection);
   const clearSel = useSelection((s) => s.clear);
 
+  // Phase 2: imported components with a structured symbol_def render from the
+  // manifest geometry rather than the static SYMBOLS map. We resolve once per
+  // render via a memo'd callback so wires.js, ComponentNode, the pin hit-test,
+  // and the probe locator all see the same answer for a given component.
+  const library = useUI((s) => s.library);
+  const symbolFor = useCallback((comp) => resolveSymbol(comp, library), [library]);
+
   // Active interaction. Held in component state because drag/rubber-band/wire
   // all need preview rendering on every pointer-move; the alternative (refs)
   // would need a forceUpdate dance. The state object is a discriminated union
@@ -65,12 +72,12 @@ export default function Canvas() {
   // The hooks have to fire on every render (Rules of Hooks), so we guard
   // each computation against a null circuit and fall back to safe defaults.
   const routed = useMemo(
-    () => (circuit ? routeWires(circuit) : { wires: [], junctions: [], grounds: [] }),
-    [circuit],
+    () => (circuit ? routeWires(circuit, library) : { wires: [], junctions: [], grounds: [] }),
+    [circuit, library],
   );
   const bounds = useMemo(
-    () => (circuit ? circuitBounds(circuit) : { x: 0, y: 0, w: 540, h: 290 }),
-    [circuit],
+    () => (circuit ? circuitBounds(circuit, library) : { x: 0, y: 0, w: 540, h: 290 }),
+    [circuit, library],
   );
   const probedNodes = useMemo(
     () => new Set((circuit?.probes || []).map((p) => p.node)),
@@ -107,7 +114,7 @@ export default function Canvas() {
     if (hit?.kind === 'pin' && hit.ref) {
       const comp = circuit.components.find((c) => c.ref === hit.ref);
       if (!comp) return;
-      const pos = pinWorld(comp, hit.pinIndex);
+      const pos = pinWorld(comp, hit.pinIndex, symbolFor(comp));
       if (!pos) return;
       svgRef.current?.setPointerCapture?.(ev.pointerId);
       setInteraction({
@@ -164,7 +171,7 @@ export default function Canvas() {
     } else if (interaction.kind === 'wire') {
       // Resolve the pin under the cursor, if any — used for the snap preview
       // and to commit the wire on pointer-up.
-      const hover = findPinAtWorld(circuit, w, interaction);
+      const hover = findPinAtWorld(circuit, w, interaction, symbolFor);
       setInteraction({ ...interaction, current: w, hoverPin: hover });
     }
   }
@@ -189,7 +196,7 @@ export default function Canvas() {
         }
       }
     } else if (interaction.kind === 'wire') {
-      const target = interaction.hoverPin || findPinAtWorld(circuit, w, interaction);
+      const target = interaction.hoverPin || findPinAtWorld(circuit, w, interaction, symbolFor);
       if (target && target.ref !== interaction.fromRef) {
         connectPins(interaction.fromRef, interaction.fromPin, target.ref, target.pinIndex);
       }
@@ -323,7 +330,13 @@ export default function Canvas() {
 
         <g className="probes">
           {(circuit.probes || []).map((p, i) => (
-            <Probe key={i} probe={p} circuit={circuit} layoutOverride={effectiveLayout} />
+            <Probe
+              key={i}
+              probe={p}
+              circuit={circuit}
+              layoutOverride={effectiveLayout}
+              symbolFor={symbolFor}
+            />
           ))}
         </g>
 
@@ -332,6 +345,7 @@ export default function Canvas() {
             <ComponentNode
               key={c.ref}
               comp={c}
+              sym={symbolFor(c)}
               layout={effectiveLayout(c.ref, c.layout)}
               selected={selectionSet.has(c.ref)}
             />
@@ -369,8 +383,8 @@ export default function Canvas() {
 
 // ---------------------------------------------------------------------------
 
-function ComponentNode({ comp, layout, selected }) {
-  if (!hasSymbol(comp.kind)) {
+function ComponentNode({ comp, sym, layout, selected }) {
+  if (!sym) {
     return (
       <g
         data-hit="component"
@@ -383,7 +397,6 @@ function ComponentNode({ comp, layout, selected }) {
       </g>
     );
   }
-  const sym = SYMBOLS[comp.kind];
   const x = layout?.x ?? 0;
   const y = layout?.y ?? 0;
   const rot = layout?.rot ?? 0;
@@ -410,9 +423,20 @@ function ComponentNode({ comp, layout, selected }) {
           rx={3}
         />
       )}
-      <g transform={`rotate(${rot}) ${scale}`} className="symbol-body">
-        {sym.render(comp)}
-      </g>
+      {sym.kind === 'manifest' ? (
+        // Manifest body is server-emitted SVG sanitised by
+        // backend/internal/library/asy.go's sanitiseSymbolSVG. dangerouslySetInnerHTML
+        // is the price of skipping a JSX parser at runtime.
+        <g
+          transform={`rotate(${rot}) ${scale}`}
+          className="symbol-body"
+          dangerouslySetInnerHTML={{ __html: sym.body }}
+        />
+      ) : (
+        <g transform={`rotate(${rot}) ${scale}`} className="symbol-body">
+          {sym.render(comp)}
+        </g>
+      )}
       <text
         className="ref-label"
         x={labelOffset.refX}
@@ -498,8 +522,8 @@ function Ground({ x, y }) {
   );
 }
 
-function Probe({ probe, circuit, layoutOverride }) {
-  const pos = locateProbePin(circuit, probe.node, layoutOverride);
+function Probe({ probe, circuit, layoutOverride, symbolFor }) {
+  const pos = locateProbePin(circuit, probe.node, layoutOverride, symbolFor);
   if (!pos) return null;
   const label = probe.name || probe.node;
   return (
@@ -525,13 +549,15 @@ function Probe({ probe, circuit, layoutOverride }) {
   );
 }
 
-function locateProbePin(circuit, node, layoutOverride) {
+function locateProbePin(circuit, node, layoutOverride, symbolFor) {
   for (const c of circuit?.components || []) {
     if (!c.nodes) continue;
+    const sym = symbolFor ? symbolFor(c) : null;
+    if (!sym) continue;
     for (let i = 0; i < c.nodes.length; i++) {
       if (c.nodes[i] === node) {
         const layout = layoutOverride ? layoutOverride(c.ref, c.layout) : c.layout;
-        const p = pinWorld({ ...c, layout }, i);
+        const p = pinWorld({ ...c, layout }, i, sym);
         if (p) return p;
       }
     }
@@ -573,17 +599,17 @@ function WirePreview({ from, to, snapped }) {
 
 // Find a pin under (world.x, world.y), excluding the wire-draw's origin pin
 // to avoid self-snapping. Returns { ref, pinIndex, x, y } or null.
-function findPinAtWorld(circuit, world, interaction) {
+function findPinAtWorld(circuit, world, interaction, symbolFor) {
   if (!world || !circuit?.components) return null;
   const r2 = PIN_HIT_RADIUS * PIN_HIT_RADIUS;
   let best = null;
   let bestDist = Infinity;
   for (const c of circuit.components) {
-    const sym = SYMBOLS[c.kind];
+    const sym = symbolFor ? symbolFor(c) : null;
     if (!sym) continue;
     for (let i = 0; i < sym.pins.length; i++) {
       if (interaction?.fromRef === c.ref && interaction?.fromPin === i) continue;
-      const p = pinWorld(c, i);
+      const p = pinWorld(c, i, sym);
       if (!p) continue;
       const dx = p.x - world.x;
       const dy = p.y - world.y;

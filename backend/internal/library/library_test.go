@@ -280,6 +280,105 @@ func TestLoaderImportRequiresSubckts(t *testing.T) {
 	}
 }
 
+// TestLoaderImportAsyAttachesSymbolToStubs covers the symbol-enhancement
+// phase-1 path: import a .lib first (creates 2 stubs with placeholder icons),
+// then upload the matching .asy. The stubs should pick up the structured
+// SymbolDef on disk + via Snapshot, and the response should report Updated
+// (not Imported) so the banner can correctly say "updated N symbols".
+func TestLoaderImportAsyAttachesSymbolToStubs(t *testing.T) {
+	root := t.TempDir()
+	libDir := t.TempDir()
+	loader := library.NewLoader(root, libDir)
+
+	// Step 1: import the .lib (2 .subckts).
+	libBody := ".SUBCKT 861140783006_2.2mF 1 2\nR1 1 2 1m\n.ENDS 861140783006_2.2mF\n.SUBCKT 861140784012_3.3mF 1 2\nR1 1 2 1m\n.ENDS 861140784012_3.3mF\n"
+	res, err := loader.Import("WCAP-AI3H.lib", libBody)
+	if err != nil {
+		t.Fatalf("Import .lib: %v", err)
+	}
+	if len(res.Imported) != 2 {
+		t.Fatalf("Imported: got %d, want 2", len(res.Imported))
+	}
+	if len(res.Updated) != 0 {
+		t.Errorf(".lib Import should not report Updated rows, got %d", len(res.Updated))
+	}
+
+	// Step 2: import the matching .asy.
+	asyBody := `Version 4
+SymbolType BLOCK
+LINE Normal -32 27 -32 0
+LINE Normal -32 37 -32 64
+LINE Normal -16 27 -48 27
+ARC Normal -58 37 -6 78 -19 41 -42 44
+SYMATTR Description WCAP-AI3H Aluminum Electrolytic Capacitors
+SYMATTR ModelFile WCAP-AI3H.lib
+PIN -32 0 NONE 8
+PINATTR PinName 1
+PINATTR SpiceOrder 1
+PIN -32 64 NONE 8
+PINATTR PinName 2
+PINATTR SpiceOrder 2
+`
+	res2, err := loader.Import("WCAP-AI3H.asy", asyBody)
+	if err != nil {
+		t.Fatalf("Import .asy: %v", err)
+	}
+	if len(res2.Imported) != 0 {
+		t.Errorf(".asy Import should report 0 Imported, got %d", len(res2.Imported))
+	}
+	if len(res2.Updated) != 2 {
+		t.Fatalf(".asy Import should report 2 Updated rows, got %d (%+v)", len(res2.Updated), res2.Updated)
+	}
+	for _, c := range res2.Updated {
+		if c.SymbolDef == nil {
+			t.Errorf("Updated row %s missing SymbolDef", c.ModelName)
+			continue
+		}
+		if len(c.SymbolDef.Pins) != 2 {
+			t.Errorf("Updated row %s SymbolDef pin count = %d, want 2", c.ModelName, len(c.SymbolDef.Pins))
+		}
+		if c.SymbolDef.ModelFile != "WCAP-AI3H.lib" {
+			t.Errorf("Updated row %s ModelFile = %q", c.ModelName, c.SymbolDef.ModelFile)
+		}
+		if c.SymbolSVG != "" {
+			t.Errorf("Updated row %s should clear flat SymbolSVG; got %q", c.ModelName, c.SymbolSVG)
+		}
+	}
+
+	// Snapshot reflects the change too.
+	snap := loader.Snapshot()
+	matches := 0
+	for _, c := range snap.Components {
+		if c.Library == "WCAP-AI3H.lib" && c.SymbolDef != nil {
+			matches++
+		}
+	}
+	if matches != 2 {
+		t.Errorf("snapshot: got %d WCAP entries with SymbolDef, want 2", matches)
+	}
+}
+
+// TestLoaderImportAsyRejectsMissingModelFile guards the contract that .asy
+// uploads must declare a SYMATTR ModelFile so the merge step can locate the
+// matching .lib stubs. Without it, the .asy is unanchored.
+func TestLoaderImportAsyRejectsMissingModelFile(t *testing.T) {
+	loader := library.NewLoader(t.TempDir(), t.TempDir())
+	body := `Version 4
+SymbolType BLOCK
+LINE Normal 0 0 22 0
+PIN 0 0 NONE 8
+PINATTR PinName 1
+PINATTR SpiceOrder 1
+PIN 22 0 NONE 8
+PINATTR PinName 2
+PINATTR SpiceOrder 2
+`
+	_, err := loader.Import("orphan.asy", body)
+	if err == nil {
+		t.Fatal("expected error for .asy without ModelFile")
+	}
+}
+
 func mustWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

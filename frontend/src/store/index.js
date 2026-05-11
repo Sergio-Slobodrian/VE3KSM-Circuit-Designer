@@ -3,7 +3,7 @@
 // over the WebSocket protocol.
 
 import { create } from 'zustand';
-import { fetchExample, fetchExamples, fetchLibrary, fetchHealth, importLibrary as apiImportLibrary } from '../api/client.js';
+import { fetchExample, fetchExamples, fetchLibrary, fetchHealth, importLibrary as apiImportLibrary, importLibraryArchive as apiImportLibraryArchive } from '../api/client.js';
 import { openSocket, nextEnvelopeID, runAnalysisStream } from '../api/ws.js';
 import { autoVDiv, autoTimeDiv } from '../lib/measurements.js';
 import {
@@ -1018,6 +1018,23 @@ export const useUI = create((set) => ({
     } catch {
       // Non-fatal: import succeeded but refresh failed. Keep the prior list
       // so the user does not see an empty palette flash.
+    }
+    return res;
+  },
+
+  /**
+   * Import a .zip pack of mixed .lib / .asy files via the bulk endpoint.
+   * Refreshes the palette on success so all imported families + enriched
+   * symbols become immediately draggable. Returns the import result
+   * (lib_file + imported + updated + warnings) for the status banner.
+   */
+  async importLibraryArchive(file) {
+    const res = await apiImportLibraryArchive(file);
+    try {
+      const { components } = await fetchLibrary();
+      set({ library: components || [] });
+    } catch {
+      /* see importLibrary */
     }
     return res;
   },

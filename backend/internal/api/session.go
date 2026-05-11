@@ -28,14 +28,26 @@ type Sender interface {
 // library. Milestone 3 ships a stub implementation in library.go; milestone 9
 // adds the real YAML/SPICE loader (DESIGN.md §8) behind the same interface.
 //
-// Import returns the freshly-discovered components and the basename the
-// server stored the .lib file under (which the client should cite in
-// Circuit.Libraries when instantiating one of those subcircuits). Echoing
-// these in the OpLibraryImport reply spares the client a follow-up
+// Import accepts both .lib and .asy uploads (m9 + symbol-enhancement phase 1):
+//   - libFile is the basename the server stored the body under (or the
+//     sanitised .asy name when the upload was a symbol file).
+//   - imported is the freshly-discovered palette entries — non-empty for .lib
+//     uploads that scan new .subckts.
+//   - updated is the set of pre-existing palette entries whose symbol
+//     geometry was enriched in place — non-empty for .asy uploads that match
+//     a previously-imported .lib by SYMATTR ModelFile.
+//
+// Echoing these in the OpLibraryImport reply spares the client a follow-up
 // library.list round-trip.
 type LibraryProvider interface {
 	List(filter string) []LibraryComponent
-	Import(filename, body string) (libFile string, imported []LibraryComponent, err error)
+	Import(filename, body string) (libFile string, imported, updated []LibraryComponent, err error)
+	// ImportArchive is the bulk-upload sibling of Import: the body is a zip
+	// containing a mix of .lib and .asy files (the canonical layout vendor
+	// packs ship in). Returns the same imported/updated split as Import plus
+	// per-file Warnings for entries that failed to ingest. Stub providers
+	// reject the call.
+	ImportArchive(filename string, body []byte) (libFile string, imported, updated []LibraryComponent, warnings []LibraryImportWarning, err error)
 }
 
 // Session holds per-connection state: the current Circuit, the active set of
@@ -292,13 +304,14 @@ func (s *Session) handleLibraryImport(env Envelope) error {
 	if err := decodePayload(env, &p); err != nil {
 		return s.replyError(env, ErrCodeBadPayload, err.Error())
 	}
-	libFile, imported, err := s.library.Import(p.Filename, p.Body)
+	libFile, imported, updated, err := s.library.Import(p.Filename, p.Body)
 	if err != nil {
 		return s.replyError(env, ErrCodeBadPayload, err.Error())
 	}
 	return s.reply(env, OpLibraryImport, LibraryImportResultPayload{
 		LibFile:  libFile,
 		Imported: imported,
+		Updated:  updated,
 	})
 }
 

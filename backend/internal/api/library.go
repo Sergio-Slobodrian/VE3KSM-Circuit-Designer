@@ -44,8 +44,12 @@ func (stubLibrary) List(filter string) []LibraryComponent {
 	return out
 }
 
-func (stubLibrary) Import(filename, body string) (string, []LibraryComponent, error) {
-	return "", nil, errors.New("library.import requires the on-disk library loader; this server is running with the stub provider")
+func (stubLibrary) Import(filename, body string) (string, []LibraryComponent, []LibraryComponent, error) {
+	return "", nil, nil, errors.New("library.import requires the on-disk library loader; this server is running with the stub provider")
+}
+
+func (stubLibrary) ImportArchive(filename string, body []byte) (string, []LibraryComponent, []LibraryComponent, []LibraryImportWarning, error) {
+	return "", nil, nil, nil, errors.New("library.import_archive requires the on-disk library loader; this server is running with the stub provider")
 }
 
 // loadedLibrary adapts a *library.Loader to the LibraryProvider interface used
@@ -72,16 +76,49 @@ func (l *loadedLibrary) List(filter string) []LibraryComponent {
 	return out
 }
 
-func (l *loadedLibrary) Import(filename, body string) (string, []LibraryComponent, error) {
+func (l *loadedLibrary) Import(filename, body string) (string, []LibraryComponent, []LibraryComponent, error) {
 	res, err := l.loader.Import(filename, body)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
-	out := make([]LibraryComponent, len(res.Imported))
+	imported := make([]LibraryComponent, len(res.Imported))
 	for i, c := range res.Imported {
-		out[i] = toAPIComponent(c)
+		imported[i] = toAPIComponent(c)
 	}
-	return res.LibFile, out, nil
+	var updated []LibraryComponent
+	if len(res.Updated) > 0 {
+		updated = make([]LibraryComponent, len(res.Updated))
+		for i, c := range res.Updated {
+			updated[i] = toAPIComponent(c)
+		}
+	}
+	return res.LibFile, imported, updated, nil
+}
+
+func (l *loadedLibrary) ImportArchive(filename string, body []byte) (string, []LibraryComponent, []LibraryComponent, []LibraryImportWarning, error) {
+	res, err := l.loader.ImportArchive(filename, body)
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+	imported := make([]LibraryComponent, len(res.Imported))
+	for i, c := range res.Imported {
+		imported[i] = toAPIComponent(c)
+	}
+	var updated []LibraryComponent
+	if len(res.Updated) > 0 {
+		updated = make([]LibraryComponent, len(res.Updated))
+		for i, c := range res.Updated {
+			updated[i] = toAPIComponent(c)
+		}
+	}
+	var warnings []LibraryImportWarning
+	if len(res.Warnings) > 0 {
+		warnings = make([]LibraryImportWarning, len(res.Warnings))
+		for i, w := range res.Warnings {
+			warnings[i] = LibraryImportWarning{File: w.File, Reason: w.Reason}
+		}
+	}
+	return res.LibFile, imported, updated, warnings, nil
 }
 
 func toAPIComponent(c library.Component) LibraryComponent {
@@ -109,6 +146,29 @@ func toAPIComponent(c library.Component) LibraryComponent {
 				Default: f.Default,
 			}
 		}
+	}
+	if c.SymbolDef != nil {
+		def := &LibrarySymbolDef{
+			BBox:        LibrarySymbolRect{W: c.SymbolDef.BBox.W, H: c.SymbolDef.BBox.H},
+			Origin:      LibrarySymbolPoint{X: c.SymbolDef.Origin.X, Y: c.SymbolDef.Origin.Y},
+			Body:        c.SymbolDef.Body,
+			Description: c.SymbolDef.Description,
+			ModelFile:   c.SymbolDef.ModelFile,
+			SpiceModel:  c.SymbolDef.SpiceModel,
+			Source:      c.SymbolDef.Source,
+		}
+		if len(c.SymbolDef.Pins) > 0 {
+			def.Pins = make([]LibrarySymbolPin, len(c.SymbolDef.Pins))
+			for i, p := range c.SymbolDef.Pins {
+				def.Pins[i] = LibrarySymbolPin{
+					Name:      p.Name,
+					X:         p.X,
+					Y:         p.Y,
+					LabelSide: p.LabelSide,
+				}
+			}
+		}
+		out.SymbolDef = def
 	}
 	return out
 }

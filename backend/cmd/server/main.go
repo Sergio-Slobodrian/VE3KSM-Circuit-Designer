@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -113,8 +114,16 @@ func main() {
 		close(idleConnsClosed)
 	}()
 
-	log.Printf("circuit-lab backend listening on %s (engine: ngspice subprocess, %s)", listenAddr, version)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	// Bind explicitly first so we can log success only after the listener is
+	// actually accepting connections — the previous "listening on …" line was
+	// printed unconditionally and lied during a port-already-in-use restart,
+	// which made it look like a successful boot when the bind had failed.
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		log.Fatalf("server: bind %s: %v", listenAddr, err)
+	}
+	log.Printf("circuit-lab backend listening on %s (engine: ngspice subprocess, %s)", ln.Addr(), version)
+	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server: %v", err)
 	}
 	<-idleConnsClosed

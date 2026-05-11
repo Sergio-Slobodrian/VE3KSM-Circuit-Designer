@@ -95,6 +95,36 @@ export async function importLibrary(filename, body) {
 }
 
 /**
+ * Import a .zip pack of mixed .lib / .asy files. Mirrors importLibrary but
+ * uses multipart/form-data because the body is binary. Returns the same
+ * shape as importLibrary plus an optional `warnings` array describing any
+ * per-file failures (a single bogus .asy in a 700-file pack lands here
+ * rather than aborting the whole import).
+ *
+ * @param {File} file the user-picked .zip
+ * @returns {Promise<{lib_file: string, imported: object[], updated: object[], warnings: object[]}>}
+ */
+export async function importLibraryArchive(file) {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const resp = await fetch('/api/library/import-archive', {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    body: form,
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    let msg = text;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.message) msg = parsed.message;
+    } catch { /* not json — keep raw */ }
+    throw new Error(msg || `${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+/**
  * Decode a CSV or WAV file server-side and return the resulting (t,v) point
  * list pre-formatted as the canonical `t:v;t:v;…` string the SourceSpec
  * stores in Params["points"]. Used by the m10 signal generator's

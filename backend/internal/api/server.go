@@ -100,6 +100,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/healthz", s.handleHealthz)
 	mux.HandleFunc("/api/library", s.handleLibraryHTTP)
 	mux.HandleFunc("/api/library/import", s.handleLibraryImportHTTP)
+	mux.HandleFunc("/api/library/import-archive", s.handleLibraryImportArchiveHTTP)
 	mux.HandleFunc("/api/circuit/parse", s.handleCircuitParse)
 	mux.HandleFunc("/api/circuit/emit", s.handleCircuitEmit)
 	mux.HandleFunc("/api/circuit/export", s.handleCircuitExport)
@@ -166,7 +167,7 @@ func (s *Server) handleLibraryImportHTTP(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, http.StatusBadRequest, "decode", err.Error())
 		return
 	}
-	libFile, imported, err := s.library.Import(p.Filename, p.Body)
+	libFile, imported, updated, err := s.library.Import(p.Filename, p.Body)
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, "import", err.Error())
 		return
@@ -174,6 +175,46 @@ func (s *Server) handleLibraryImportHTTP(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, LibraryImportResultPayload{
 		LibFile:  libFile,
 		Imported: imported,
+		Updated:  updated,
+	})
+}
+
+// handleLibraryImportArchiveHTTP ingests a .zip pack of .lib + .asy files via
+// multipart/form-data and forwards it to the LibraryProvider. The archive is
+// the canonical bulk-import path for vendor packs (Würth, Coilcraft, etc.)
+// where dozens of .libs ship alongside hundreds of .asy companions; per-file
+// uploads of those packs would be unusable. Body cap is 32 MB so the Würth
+// passive components pack (~9 MB) fits comfortably with headroom.
+func (s *Server) handleLibraryImportArchiveHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST only")
+		return
+	}
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "decode", err.Error())
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "decode", "missing form field 'file'")
+		return
+	}
+	defer file.Close()
+	body, err := io.ReadAll(io.LimitReader(file, 32<<20))
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "decode", err.Error())
+		return
+	}
+	libFile, imported, updated, warnings, err := s.library.ImportArchive(header.Filename, body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "import", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, LibraryImportResultPayload{
+		LibFile:  libFile,
+		Imported: imported,
+		Updated:  updated,
+		Warnings: warnings,
 	})
 }
 

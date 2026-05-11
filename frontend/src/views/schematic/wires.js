@@ -14,11 +14,15 @@
 // fixture. Editing milestones will replace this with user-routed wires
 // stored in Circuit.Wires.
 
-import { SYMBOLS, pinWorld } from '../../symbols/symbols.jsx';
+import { resolveSymbol, pinWorld } from '../../symbols/symbols.jsx';
 
 const GROUND_NODE = '0';
 
 /**
+ * @param {object} circuit
+ * @param {Array} [library] palette snapshot used to resolve manifest-driven
+ *   symbols (Phase 2). Optional — primitives still resolve via the static
+ *   SYMBOLS map even if library is empty.
  * @returns {{
  *   wires: Array<{node: string, d: string}>,
  *   junctions: Array<{node: string, x: number, y: number}>,
@@ -26,15 +30,15 @@ const GROUND_NODE = '0';
  *   nodePins: Map<string, Array<{x: number, y: number, ref: string}>>,
  * }}
  */
-export function routeWires(circuit) {
+export function routeWires(circuit, library) {
   const nodePins = new Map();
 
   for (const c of circuit?.components || []) {
-    const sym = SYMBOLS[c.kind];
+    const sym = resolveSymbol(c, library);
     if (!sym) continue;
     (c.nodes || []).forEach((node, i) => {
       if (node == null || node === '') return;
-      const w = pinWorld(c, i);
+      const w = pinWorld(c, i, sym);
       if (!w) return;
       if (!nodePins.has(node)) nodePins.set(node, []);
       nodePins.get(node).push({ x: w.x, y: w.y, ref: c.ref });
@@ -82,12 +86,13 @@ function mean(xs) {
 
 /**
  * Compute an axis-aligned bounding box that fits every component and wire.
- * Used to pick the SVG viewBox.
+ * Used to pick the SVG viewBox. Takes the live library so manifest-driven
+ * symbols contribute their actual bbox rather than the static fallback.
  */
-export function circuitBounds(circuit) {
+export function circuitBounds(circuit, library) {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const c of circuit?.components || []) {
-    const sym = SYMBOLS[c.kind];
+    const sym = resolveSymbol(c, library);
     if (!sym) continue;
     const half = Math.max(sym.bbox.w, sym.bbox.h) / 2 + 6;
     const x = c.layout?.x ?? 0;

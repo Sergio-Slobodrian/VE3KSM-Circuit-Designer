@@ -402,6 +402,11 @@ button { font-family: inherit; }
 }
 .insp-input:focus { border-color: var(--selection-color); }
 .insp-input--mono { font-family: var(--font-mono); }
+.insp-variant {
+  appearance: auto;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
 
 .insp-multilist {
   list-style: none;

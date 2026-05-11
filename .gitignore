@@ -26,3 +26,9 @@ Thumbs.db
 *.raw
 *.log
 /runs/
+
+# Others
+library
+ltspice
+symbol_enhancement.md
+examples

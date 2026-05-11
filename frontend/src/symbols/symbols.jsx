@@ -11,6 +11,14 @@
 //
 // Symbols are intentionally small (≈22–30 px) so they sit on the 14 px grid
 // the mockup uses without crowding labels.
+//
+// Phase 2 of symbol_enhancement.md adds a second source: imported library
+// manifests carrying a structured `symbol_def` (LTspice .asy converter
+// output). resolveSymbol() unifies the two — manifest first, static fallback —
+// so the canvas, wire router, and pin-hit detector all read pins/bbox the
+// same way regardless of authoring origin.
+
+import { findFamily } from '../lib/library.js';
 
 const STROKE = 0.9;
 
@@ -129,10 +137,14 @@ export function rotatePoint(x, y, rot) {
   }
 }
 
-/** Pin world position for one Component, indexed by pin slot. */
-export function pinWorld(component, pinIndex) {
-  const sym = SYMBOLS[component.kind];
-  if (!sym || pinIndex < 0 || pinIndex >= sym.pins.length) return null;
+/**
+ * Pin world position for one Component, indexed by pin slot. The resolved
+ * `sym` (from resolveSymbol) carries the pin coordinates — passing it in
+ * rather than re-resolving lets callers iterating many components share a
+ * single resolution per component.
+ */
+export function pinWorld(component, pinIndex, sym) {
+  if (!sym || !sym.pins || pinIndex < 0 || pinIndex >= sym.pins.length) return null;
   const local = sym.pins[pinIndex];
   const r = rotatePoint(local.x, local.y, component.layout?.rot);
   const sx = component.layout?.mirror ? -r.x : r.x;
@@ -140,6 +152,43 @@ export function pinWorld(component, pinIndex) {
     x: (component.layout?.x ?? 0) + sx,
     y: (component.layout?.y ?? 0) + r.y,
   };
+}
+
+/**
+ * Resolve the canvas symbol for a placed component. Imported components with
+ * a structured symbol_def (carried on the manifest after an .asy merge) win
+ * over the static SYMBOLS fallback; tubes / primitives that have no manifest
+ * geometry use SYMBOLS.
+ *
+ * Returns one of:
+ *   { kind: 'manifest', bbox, pins, body }       — server-emitted SVG body
+ *   { kind: 'static',   bbox, pins, render }     — JSX render function
+ *   null                                          — no match (placeholder)
+ *
+ * @param {{kind: string, model?: string}} comp
+ * @param {Array} library palette snapshot (collapsed or raw — both work)
+ */
+export function resolveSymbol(comp, library) {
+  if (!comp) return null;
+  const fam = library ? findFamily(library, comp) : null;
+  if (fam?.symbol_def?.body && Array.isArray(fam.symbol_def.pins)) {
+    return {
+      kind: 'manifest',
+      bbox: fam.symbol_def.bbox || { w: 22, h: 14 },
+      pins: fam.symbol_def.pins,
+      body: fam.symbol_def.body,
+    };
+  }
+  const built = SYMBOLS[comp.kind];
+  if (built) {
+    return {
+      kind: 'static',
+      bbox: built.bbox,
+      pins: built.pins,
+      render: built.render,
+    };
+  }
+  return null;
 }
 
 /** Returns true if Circuit Lab knows how to render this kind. */
