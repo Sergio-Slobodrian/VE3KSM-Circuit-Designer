@@ -408,6 +408,24 @@ button { font-family: inherit; }
   text-overflow: ellipsis;
 }
 
+.insp-desc {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.insp-desc-link {
+  color: var(--selection-color);
+  text-decoration: underline;
+}
+.insp-desc-link:hover { text-decoration: none; }
+
+.pin-label {
+  user-select: none;
+  pointer-events: none;
+}
+
 .insp-multilist {
   list-style: none;
   margin: 0;

@@ -27,6 +27,20 @@ import {
 // of a pin (in SVG world units) targets that pin.
 const PIN_HIT_RADIUS = 5;
 
+// Zoom bounds — viewBox width/height clamped into this range. The lower
+// bound prevents the user from zooming into a single pixel of viewBox space
+// (which causes ngraphic precision wobble); the upper bound keeps a
+// runaway scroll-wheel from zooming so far out the schematic disappears.
+const MIN_VIEW_SIZE = 30;
+const MAX_VIEW_SIZE = 5000;
+
+// Pixels-per-SVG-unit threshold above which decorative pin labels become
+// visible. The default fit-to-content view sits around 1–1.5 px/unit on a
+// typical inspector layout; at 2.5 px/unit the 3.2-unit font reads at
+// ~8 px screen — large enough to be useful, restricted enough to stay out
+// of the way at zoomed-out overview.
+const PIN_LABEL_PX_PER_UNIT = 2.5;
+
 export default function Canvas() {
   const svgRef = useRef(null);
 
@@ -79,6 +93,47 @@ export default function Canvas() {
     () => (circuit ? circuitBounds(circuit, library) : { x: 0, y: 0, w: 540, h: 290 }),
     [circuit, library],
   );
+
+  // userViewport: null = "fit to bounds"; otherwise the user-controlled
+  // {x,y,w,h} the wheel/pan handlers have steered to. We reset back to null
+  // when a different circuit identity (different title) is loaded so a fresh
+  // example always opens at fit. Edits to the current circuit don't reset —
+  // the user keeps whatever zoom they steered to.
+  const [userViewport, setUserViewport] = useState(null);
+  useEffect(() => { setUserViewport(null); }, [circuit?.title]);
+  const viewBox = userViewport ?? bounds;
+
+  // svgPxSize tracks the rendered SVG element's pixel dimensions so we can
+  // compute screen-pixels-per-SVG-unit. Two consumers: the wheel handler
+  // (for keeping the world-point-under-cursor anchored during zoom) and
+  // the pin-label visibility gate.
+  //
+  // The early-return branches above (loading / error / no-circuit) render
+  // a non-SVG message in place of the canvas; the SVG only mounts once a
+  // circuit is in hand. Both this observer and the wheel listener below
+  // therefore depend on a stable proxy for "SVG element exists" so the
+  // effect re-runs on the loading→ready transition. `circuit?.title` is
+  // the cheapest such proxy that already drives userViewport reset.
+  const [svgPxSize, setSvgPxSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect;
+      if (r) setSvgPxSize({ w: r.width, h: r.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [circuit?.title]);
+
+  // px/unit follows SVG's preserveAspectRatio="xMidYMid meet": the smaller
+  // of the two ratios wins (the longer axis fits, the shorter one has
+  // letterbox margins).
+  const pxPerUnit = useMemo(() => {
+    if (!viewBox.w || !viewBox.h || !svgPxSize.w || !svgPxSize.h) return 0;
+    return Math.min(svgPxSize.w / viewBox.w, svgPxSize.h / viewBox.h);
+  }, [viewBox.w, viewBox.h, svgPxSize.w, svgPxSize.h]);
+  const showPinLabels = pxPerUnit >= PIN_LABEL_PX_PER_UNIT;
   const probedNodes = useMemo(
     () => new Set((circuit?.probes || []).map((p) => p.node)),
     [circuit?.probes],
@@ -104,6 +159,23 @@ export default function Canvas() {
   // ---------------------------------------------------------------- pointers
 
   function handlePointerDown(ev) {
+    // Middle-mouse drag (or alt+left-drag for trackpads without a middle
+    // button) pans the viewport. We track raw client pixels because the
+    // live zoom factor can change between move events and we want the
+    // canvas to slide under the cursor 1:1. Left-button + shift stays the
+    // existing additive-rubber-band gesture.
+    if (ev.button === 1 || (ev.button === 0 && ev.altKey)) {
+      svgRef.current?.setPointerCapture?.(ev.pointerId);
+      setInteraction({
+        kind: 'pan',
+        startClientX: ev.clientX,
+        startClientY: ev.clientY,
+        startView: viewBox,
+      });
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     if (ev.button !== 0) return;
     const w = eventToWorld(svgRef.current, ev);
     if (!w) return;
@@ -158,6 +230,19 @@ export default function Canvas() {
 
   function handlePointerMove(ev) {
     if (interaction.kind === 'idle') return;
+    if (interaction.kind === 'pan') {
+      const el = svgRef.current;
+      if (!el) return;
+      const px = svgPxRef.current;
+      if (!px.w || !px.h) return;
+      const sv = interaction.startView;
+      // Same letterbox rule used by px/unit: the longer-axis ratio wins.
+      const unitsPerPixel = Math.max(sv.w / px.w, sv.h / px.h);
+      const dx = (ev.clientX - interaction.startClientX) * unitsPerPixel;
+      const dy = (ev.clientY - interaction.startClientY) * unitsPerPixel;
+      setUserViewport({ x: sv.x - dx, y: sv.y - dy, w: sv.w, h: sv.h });
+      return;
+    }
     const w = eventToWorld(svgRef.current, ev);
     if (!w) return;
     if (interaction.kind === 'drag') {
@@ -177,6 +262,10 @@ export default function Canvas() {
   }
 
   function handlePointerUp(ev) {
+    if (interaction.kind === 'pan') {
+      setInteraction({ kind: 'idle' });
+      return;
+    }
     const w = eventToWorld(svgRef.current, ev);
     if (interaction.kind === 'drag') {
       if (interaction.dx || interaction.dy) {
@@ -206,6 +295,52 @@ export default function Canvas() {
 
   function handlePointerCancel() { setInteraction({ kind: 'idle' }); }
 
+  // ------------------------------------------------------- wheel zoom
+  //
+  // Mounted via addEventListener with passive:false so we can preventDefault
+  // on every wheel — React's synthetic onWheel is passive in modern Chrome
+  // and silently ignores preventDefault, which lets the parent flex layout
+  // scroll the canvas out of view on every zoom attempt. We close over
+  // viewBoxRef/svgPxRef rather than the bare state values so the same
+  // handler instance keeps reading the latest values without re-binding.
+  const viewBoxRef = useRef(viewBox);
+  const svgPxRef = useRef(svgPxSize);
+  viewBoxRef.current = viewBox;
+  svgPxRef.current = svgPxSize;
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    function onWheel(ev) {
+      ev.preventDefault();
+      const cur = viewBoxRef.current;
+      const px = svgPxRef.current;
+      if (!cur.w || !cur.h || !px.w || !px.h) return;
+      // Anchor the world-point under the cursor: compute it via the current
+      // CTM before mutating viewBox, then solve for the new viewBox x/y
+      // that puts it back at the same screen pixel.
+      const world = eventToWorld(el, ev);
+      if (!world) return;
+      // Smooth exponential zoom — wheel down (deltaY > 0) zooms out.
+      const factor = Math.exp(ev.deltaY * 0.0015);
+      let nw = cur.w * factor;
+      let nh = cur.h * factor;
+      // Clamp on the longer axis, scale the shorter by the same factor so
+      // the aspect ratio of the user's chosen view doesn't drift over many
+      // wheel events.
+      const longer = Math.max(nw, nh);
+      if (longer < MIN_VIEW_SIZE) {
+        const k = MIN_VIEW_SIZE / longer; nw *= k; nh *= k;
+      } else if (longer > MAX_VIEW_SIZE) {
+        const k = MAX_VIEW_SIZE / longer; nw *= k; nh *= k;
+      }
+      const nx = world.x - (world.x - cur.x) * (nw / cur.w);
+      const ny = world.y - (world.y - cur.y) * (nh / cur.h);
+      setUserViewport({ x: nx, y: ny, w: nw, h: nh });
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [circuit?.title]);
+
   // ------------------------------------------------------- keyboard shortcuts
 
   useEffect(() => {
@@ -234,6 +369,36 @@ export default function Canvas() {
         ev.preventDefault();
         return;
       }
+
+      // Zoom shortcuts run regardless of selection. "0" or Home refits to
+      // the circuit's natural bounds; +/- step in by ~15% from the centre
+      // of the current viewBox.
+      if (ev.key === '0' || ev.key === 'Home') {
+        setUserViewport(null);
+        ev.preventDefault();
+        return;
+      }
+      if (ev.key === '+' || ev.key === '=' || ev.key === '-' || ev.key === '_') {
+        const cur = viewBoxRef.current;
+        if (cur.w && cur.h) {
+          const isIn = ev.key === '+' || ev.key === '=';
+          const factor = isIn ? 0.85 : 1.18;
+          let nw = cur.w * factor;
+          let nh = cur.h * factor;
+          const longer = Math.max(nw, nh);
+          if (longer < MIN_VIEW_SIZE) {
+            const k = MIN_VIEW_SIZE / longer; nw *= k; nh *= k;
+          } else if (longer > MAX_VIEW_SIZE) {
+            const k = MAX_VIEW_SIZE / longer; nw *= k; nh *= k;
+          }
+          const cx = cur.x + cur.w / 2;
+          const cy = cur.y + cur.h / 2;
+          setUserViewport({ x: cx - nw / 2, y: cy - nh / 2, w: nw, h: nh });
+        }
+        ev.preventDefault();
+        return;
+      }
+
       if (selectedRefs.length === 0) return;
 
       if (ev.key === 'r' || ev.key === 'R') {
@@ -308,7 +473,7 @@ export default function Canvas() {
     >
       <svg
         ref={svgRef}
-        viewBox={`${bounds.x} ${bounds.y} ${bounds.w} ${bounds.h}`}
+        viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
         preserveAspectRatio="xMidYMid meet"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -348,6 +513,7 @@ export default function Canvas() {
               sym={symbolFor(c)}
               layout={effectiveLayout(c.ref, c.layout)}
               selected={selectionSet.has(c.ref)}
+              showPinLabels={showPinLabels}
             />
           ))}
         </g>
@@ -383,7 +549,7 @@ export default function Canvas() {
 
 // ---------------------------------------------------------------------------
 
-function ComponentNode({ comp, sym, layout, selected }) {
+function ComponentNode({ comp, sym, layout, selected, showPinLabels }) {
   if (!sym) {
     return (
       <g
@@ -479,6 +645,7 @@ function ComponentNode({ comp, sym, layout, selected }) {
         // Local pin position in the unrotated symbol — Canvas's outer <g>
         // already rotates/mirrors, so we render the dot at the local coord.
         const px = layout?.mirror ? -pin.x : pin.x;
+        const label = pinLabelOffset(pin, layout?.mirror);
         return (
           <g
             key={`pin-${i}`}
@@ -504,6 +671,26 @@ function ComponentNode({ comp, sym, layout, selected }) {
               opacity={0.6}
               pointerEvents="none"
             />
+            {showPinLabels && label && pin.name && (
+              <text
+                className="pin-label"
+                x={px + label.dx}
+                y={pin.y + label.dy}
+                fontSize={3.2}
+                fontFamily="var(--font-mono)"
+                fill="var(--text-tertiary)"
+                textAnchor={label.anchor}
+                dominantBaseline={label.baseline}
+                // Cancel the parent rotation so the label reads upright at
+                // any orientation — the dx/dy already follow the rotated
+                // pin position, so the text just needs to be derotated in
+                // place around its anchor.
+                transform={`rotate(${-rot} ${px + label.dx} ${pin.y + label.dy})`}
+                pointerEvents="none"
+              >
+                {pin.name}
+              </text>
+            )}
           </g>
         );
       })}
@@ -640,6 +827,24 @@ function labelPosition(sym, rot) {
     return { refX: 10, refY: -2, valX: 10, valY: 10 };
   }
   return { refX: -sym.bbox.w / 2, refY: -sym.bbox.h / 2 - 3, valX: -sym.bbox.w / 2, valY: sym.bbox.h / 2 + 9 };
+}
+
+// pinLabelOffset turns a pin's label_side hint into a small dx/dy + SVG text
+// anchoring triple so the label sits just outside the pin dot on the side the
+// .asy author chose. Returns null when the pin has no directional hint
+// (label_side="none" or absent) — phase-1 caps and inductors fall in this
+// bucket and stay un-labelled to avoid clutter.
+function pinLabelOffset(pin, mirror) {
+  const side = (pin?.label_side || '').toLowerCase();
+  if (!side || side === 'none') return null;
+  const gap = 2.5;
+  switch (side) {
+    case 'top':    return { dx: 0,    dy: -gap, anchor: 'middle',                        baseline: 'text-after-edge' };
+    case 'bottom': return { dx: 0,    dy:  gap, anchor: 'middle',                        baseline: 'hanging' };
+    case 'left':   return { dx: -gap, dy: 0,    anchor: mirror ? 'start' : 'end',        baseline: 'middle' };
+    case 'right':  return { dx:  gap, dy: 0,    anchor: mirror ? 'end'   : 'start',      baseline: 'middle' };
+    default: return null;
+  }
 }
 
 function prettyValue(value) {

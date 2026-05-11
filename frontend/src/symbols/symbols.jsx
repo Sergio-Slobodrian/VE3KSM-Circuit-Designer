@@ -22,7 +22,11 @@ import { findFamily } from '../lib/library.js';
 
 const STROKE = 0.9;
 
-function pinAt(x, y, name) { return { x, y, name }; }
+function pinAt(x, y, name, labelSide) {
+  const out = { x, y, name };
+  if (labelSide) out.label_side = labelSide;
+  return out;
+}
 
 export const SYMBOLS = {
   resistor: {
@@ -87,7 +91,16 @@ export const SYMBOLS = {
   // render the preamp_12ax7 fixture. Pin order matches the .SUBCKT 12AX7
   // header: plate (top), grid (left), cathode (bottom).
   subcircuit: {
-    pins: [pinAt(0, -22, 'plate'), pinAt(-22, 0, 'grid'), pinAt(0, 22, 'cathode')],
+    // Triode pins carry label_side hints so the zoom-gated pin-label pass
+    // in Canvas.jsx (rendered when pxPerUnit ≥ PIN_LABEL_PX_PER_UNIT) shows
+    // "plate", "grid", "cathode" next to each lead — same convention as
+    // .asy-imported parts, just authored by hand because this symbol
+    // predates the import pipeline.
+    pins: [
+      pinAt(0, -22, 'plate',   'top'),
+      pinAt(-22, 0, 'grid',    'left'),
+      pinAt(0,  22, 'cathode', 'bottom'),
+    ],
     bbox: { w: 44, h: 44 },
     render: () => (
       <g fill="none" stroke="currentColor" strokeWidth={STROKE}>

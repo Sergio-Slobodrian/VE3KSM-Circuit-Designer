@@ -52,6 +52,9 @@ export default function Inspector() {
           <br /><br />
           Drop a component from the palette to add one. Use{' '}
           <kbd>R</kbd>/<kbd>F</kbd>/<kbd>Del</kbd> to rotate, mirror, or delete.
+          <br /><br />
+          <kbd>wheel</kbd> zooms, <kbd>middle-drag</kbd> or <kbd>alt-drag</kbd>{' '}
+          pans, <kbd>0</kbd> refits, <kbd>+</kbd>/<kbd>-</kbd> step zoom.
         </div>
       </div>
     );
@@ -177,6 +180,10 @@ export default function Inspector() {
           <ReadOnlyField name="AC stim" value={`${comp.source.ac.magnitude || '1'} ∠ ${comp.source.ac.phase || '0'}°`} />
         )}
 
+        {family?.description && (
+          <DescriptionField description={family.description} />
+        )}
+
         <ReadOnlyField name="Position" value={`(${comp.layout?.x ?? 0}, ${comp.layout?.y ?? 0})`} />
         {comp.layout?.rot ? <ReadOnlyField name="Rotation" value={`${comp.layout.rot}°`} /> : null}
         {comp.layout?.mirror ? <ReadOnlyField name="Mirrored" value="yes" /> : null}
@@ -257,6 +264,56 @@ function ReadOnlyField({ name, value }) {
       <dd>{value}</dd>
     </>
   );
+}
+
+// DescriptionField renders a library family's description. An http(s) URL
+// inside the text is split out and rendered as a `<a target="_blank">` so the
+// user can jump to the manufacturer datasheet from the inspector. React
+// escapes the surrounding text by default so the only sanitisation we need is
+// the URL pattern itself.
+function DescriptionField({ description }) {
+  const segments = useMemo(() => splitDescriptionURLs(description), [description]);
+  return (
+    <>
+      <dt>Description</dt>
+      <dd className="insp-desc">
+        {segments.map((seg, i) =>
+          seg.url ? (
+            <a
+              key={i}
+              href={seg.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="insp-desc-link"
+            >
+              {seg.text}
+            </a>
+          ) : (
+            <span key={i}>{seg.text}</span>
+          ),
+        )}
+      </dd>
+    </>
+  );
+}
+
+// splitDescriptionURLs returns an array of segments where http(s) URLs are
+// tagged with `url`. The regex deliberately stops at whitespace and common
+// punctuation that LTspice users tend to put after the URL ("…datasheet:
+// https://… .") so trailing periods don't get baked into the href.
+function splitDescriptionURLs(text) {
+  if (!text) return [];
+  const re = /https?:\/\/[^\s<>"'()\[\]]+[^\s<>"'()\[\].,;:!?]/g;
+  const out = [];
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index) });
+    out.push({ text: m[0], url: m[0] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
 }
 
 // Controlled input that commits the value on blur or Enter — keeps the user's

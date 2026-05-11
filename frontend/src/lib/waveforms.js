@@ -23,6 +23,15 @@
  */
 export const WAVEFORM_MODES = [
   {
+    key: 'dc', label: 'DC',
+    icon: 'M0 5 H12',
+    params: [
+      { key: 'value', label: 'Value', default: '0', unit: 'V' },
+    ],
+    meta: (p) => `DC ${p.value ?? '0'} V`,
+    preview: previewDC,
+  },
+  {
     key: 'sin', label: 'Sine',
     icon: 'M0 5 q3 -5 6 0 t6 0',
     params: [
@@ -222,6 +231,10 @@ const PREVIEW_W = 200;
 const PREVIEW_H = 70;
 const PREVIEW_MID = PREVIEW_H / 2;
 const PREVIEW_AMP = 22; // pixels at full ampl
+
+function previewDC() {
+  return `M0 ${PREVIEW_MID} H${PREVIEW_W}`;
+}
 
 function previewSin(p) {
   return sineLikePath(p, (t) => Math.sin(2 * Math.PI * t));

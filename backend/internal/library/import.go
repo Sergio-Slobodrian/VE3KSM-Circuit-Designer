@@ -174,7 +174,7 @@ func (l *Loader) attachSymbolToImportedStubs(sym *SymbolDef) ([]Component, error
 	if err != nil {
 		return nil, err
 	}
-	return l.attachSymbolUsingIndex(sym, idx)
+	return l.attachSymbolUsingIndex(sym, "", idx)
 }
 
 // stubRecord is one (path, decoded-Component) pair held by the in-memory
@@ -238,7 +238,13 @@ func (l *Loader) buildStubIndex() (stubIndex, error) {
 // ModelFile. Mutates the in-memory comp in place so a second .asy hitting
 // the same family sees the already-applied SymbolDef, and writes the
 // updated YAML back to disk. Returns the slice of updated components.
-func (l *Loader) attachSymbolUsingIndex(sym *SymbolDef, idx stubIndex) ([]Component, error) {
+//
+// groupOverride, when non-empty, replaces the stub's Group — used by the
+// archive importer to bucket parts under the .asy's directory path
+// (`sym/Capacitors/Electrolytic/` → `Imported · Capacitors · Electrolytic`).
+// Pass "" from the single-file path so the importLibCore default ("Imported"
+// or "Tubes") is preserved.
+func (l *Loader) attachSymbolUsingIndex(sym *SymbolDef, groupOverride string, idx stubIndex) ([]Component, error) {
 	target := strings.ToLower(sym.ModelFile)
 	records := idx[target]
 	if len(records) == 0 {
@@ -248,6 +254,17 @@ func (l *Loader) attachSymbolUsingIndex(sym *SymbolDef, idx stubIndex) ([]Compon
 	for _, rec := range records {
 		rec.comp.SymbolDef = sym
 		rec.comp.SymbolSVG = "" // structured supersedes flat
+		if groupOverride != "" {
+			rec.comp.Group = groupOverride
+		}
+		// Promote the .asy's richer Description over the "Imported from X.lib"
+		// boilerplate that componentFromSubckt assigns when no symbol metadata
+		// is available. Don't clobber a description the user (or a future
+		// import path) might have set deliberately — only replace the known
+		// boilerplate or an empty string.
+		if sym.Description != "" && isBoilerplateDescription(rec.comp.Description) {
+			rec.comp.Description = sym.Description
+		}
 		out, err := yaml.Marshal(&rec.comp)
 		if err != nil {
 			return nil, fmt.Errorf("library: marshal %s: %w", rec.path, err)
@@ -261,6 +278,16 @@ func (l *Loader) attachSymbolUsingIndex(sym *SymbolDef, idx stubIndex) ([]Compon
 		updated = append(updated, c)
 	}
 	return updated, nil
+}
+
+// isBoilerplateDescription reports whether a stub's existing description is
+// the default "Imported from <lib>" string that componentFromSubckt assigns —
+// i.e. safe to overwrite with a richer SYMATTR Description.
+func isBoilerplateDescription(s string) bool {
+	if s == "" {
+		return true
+	}
+	return strings.HasPrefix(s, "Imported from ") || strings.HasPrefix(s, "Triode model from ")
 }
 
 // sanitiseAsyFilename mirrors sanitiseLibFilename for .asy uploads. The leaf
