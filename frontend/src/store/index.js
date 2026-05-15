@@ -85,6 +85,51 @@ export const useCircuit = create((set, get) => {
       set({ circuit, history: [], future: [], dirty: false });
     },
 
+    /**
+     * Replace both the active circuit and the displayed source name. Used by
+     * the Schematic toolbar's Open… action when the user picks a .cir file —
+     * sourceName drives the titlebar's `{name}.cir` label so the user sees
+     * the working filename without round-tripping through load().
+     */
+    openCircuit(sourceName, circuit) {
+      set({
+        sourceName,
+        circuit,
+        status: 'ready',
+        error: null,
+        history: [],
+        future: [],
+        dirty: false,
+      });
+    },
+
+    /**
+     * Initialise a blank circuit. Schematic toolbar's New action calls this
+     * after the dirty-confirm prompt. Title defaults to 'untitled'; the
+     * sourceName goes null so the titlebar reads `no circuit` and Save will
+     * prompt for a name via the browser download dialog.
+     */
+    newCircuit() {
+      set({
+        sourceName: null,
+        circuit: {
+          title: 'untitled',
+          comments: [],
+          libraries: [],
+          parameters: [],
+          components: [],
+          wires: [],
+          probes: [],
+          analyses: [],
+        },
+        status: 'ready',
+        error: null,
+        history: [],
+        future: [],
+        dirty: false,
+      });
+    },
+
     undo() {
       const { history, future, circuit } = get();
       if (history.length === 0 || !circuit) return;

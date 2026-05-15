@@ -5,11 +5,13 @@
 import Canvas from './Canvas.jsx';
 import Inspector from './Inspector.jsx';
 import Palette from './Palette.jsx';
+import SchematicToolbar from './SchematicToolbar.jsx';
 import StatusBar from './StatusBar.jsx';
 
 export default function Schematic() {
   return (
     <div className="schematic">
+      <SchematicToolbar />
       <div className="schematic-workspace">
         <Palette />
         <Canvas />

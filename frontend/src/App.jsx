@@ -7,7 +7,7 @@
 //   3. loads /api/examples and opens the first one (preamp_12ax7) so the
 //      schematic canvas is non-empty on first paint.
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Schematic from './views/schematic/Schematic.jsx';
 import Scope from './views/scope/Scope.jsx';
 import Spectrum from './views/spectrum/Spectrum.jsx';
@@ -40,10 +40,15 @@ export default function App() {
     loadCatalog();
   }, [pingBackend, loadLibrary, loadCatalog]);
 
+  // First-paint bootstrap: open the preferred example once the catalog
+  // arrives. Guarded by a ref so it only fires on initial mount — otherwise
+  // hitting Schematic's "New" button (which sets sourceName=null on purpose)
+  // would immediately reload preamp_12ax7 on top of the blank circuit.
+  const didAutoLoad = useRef(false);
   useEffect(() => {
-    // Once the catalog arrives, open the first example. Prefer preamp_12ax7
-    // when present so the canvas matches the mockup on first paint.
+    if (didAutoLoad.current) return;
     if (catalog.length === 0 || sourceName) return;
+    didAutoLoad.current = true;
     const preferred = catalog.find((e) => e.name === 'preamp_12ax7') ?? catalog[0];
     load(preferred.name);
   }, [catalog, sourceName, load]);

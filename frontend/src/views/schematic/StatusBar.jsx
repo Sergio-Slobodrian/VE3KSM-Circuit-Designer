@@ -57,14 +57,26 @@ export default function StatusBar() {
       {dirty && <span className="status-dirty" title="Edits not yet saved to disk">● modified</span>}
 
       <span style={{ marginLeft: 'auto' }}>
-        <label htmlFor="example-select" className="status-label">Example:&nbsp;</label>
+        <label htmlFor="example-select" className="status-label">File:&nbsp;</label>
         <select
           id="example-select"
           value={sourceName ?? ''}
-          onChange={(ev) => load(ev.target.value)}
-          disabled={catalog.length === 0}
+          onChange={(ev) => {
+            const v = ev.target.value;
+            // The sentinel value for the current file (or blank) is a no-op;
+            // only catalog selections trigger a load.
+            if (v && v !== sourceName) load(v);
+          }}
+          disabled={catalog.length === 0 && !sourceName}
         >
-          {catalog.length === 0 && <option value="">no examples</option>}
+          {/* When the current file isn't an example (user opened a .cir or
+              hit New), synthesise an option so the dropdown reflects the
+              actual loaded state instead of silently falling back to the
+              first catalog entry. */}
+          {sourceName && !catalog.some((e) => e.name === sourceName) && (
+            <option value={sourceName}>{sourceName} (current)</option>
+          )}
+          {!sourceName && <option value="">(blank)</option>}
           {catalog.map((e) => (
             <option key={e.name} value={e.name}>{e.title || e.name}</option>
           ))}

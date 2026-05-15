@@ -148,6 +148,42 @@ button { font-family: inherit; }
   min-height: 0;
 }
 
+/* File toolbar — sits above the palette+canvas+inspector grid. */
+.schematic-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border-bottom: 0.5px solid var(--border);
+  font-size: 12px;
+}
+.schematic-toolbar-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 0.5px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.schematic-toolbar-btn:hover:not(:disabled) {
+  border-color: var(--selection-color);
+}
+.schematic-toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.schematic-toolbar-status {
+  margin-left: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.schematic-toolbar-status--ok    { color: var(--text-success, var(--text-secondary)); }
+.schematic-toolbar-status--busy  { color: var(--text-secondary); font-style: italic; }
+.schematic-toolbar-status--error { color: var(--text-error, var(--text-warning)); }
+
 /* Palette --------------------------- */
 
 .palette {
@@ -1011,8 +1047,81 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  position: relative;
 }
 .smith-pane .smith-svg { display: block; width: 100%; height: auto; }
+
+/* Clickable inline pane — hover ring + bottom-right expand glyph hint that
+   the chart opens a larger modal. */
+.smith-pane--clickable { cursor: zoom-in; }
+.smith-pane--clickable:hover { border-color: #2a4050; }
+.smith-pane--clickable:focus-visible {
+  outline: 1px solid var(--selection-color);
+  outline-offset: 1px;
+}
+.smith-expand {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  font-size: 12px;
+  color: #5fa896;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.smith-pane--clickable:hover .smith-expand { opacity: 1; }
+
+/* Z₀-mismatch hint shown when the trace clamps to the boundary on most
+   bins — the canonical audio-amp-on-50Ω case. */
+.smith-hint {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-warning, #d4a05f);
+  line-height: 1.35;
+}
+
+/* Modal — full-screen backdrop + centred enlarged chart. Mounted via Portal
+   so it escapes Network's overflow/transform context. */
+.smith-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+.smith-modal {
+  position: relative;
+  background: var(--bg-screen);
+  border: 0.5px solid #2a4050;
+  border-radius: 6px;
+  padding: 18px 22px;
+}
+.smith-modal .smith-pane--large {
+  width: min(72vh, 72vw, 640px);
+  border: none;
+  padding: 0;
+  gap: 8px;
+}
+.smith-modal .smith-pane--large .smith-head { font-size: 13px; }
+.smith-modal .smith-pane--large .smith-foot { font-size: 12px; }
+.smith-modal .smith-pane--large .smith-hint { font-size: 11px; }
+.smith-modal-close {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.smith-modal-close:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.06); }
 .smith-head {
   font-size: 9.5px;
   color: #5fa896;

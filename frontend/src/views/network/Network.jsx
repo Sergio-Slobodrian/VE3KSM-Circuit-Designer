@@ -8,12 +8,12 @@
 // layout (DESIGN.md §6.4) and uPlot's tiny instances are cheap to mount
 // twice. Spectrum keeps Plotly because of its native log axis + marker UX.
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCircuit, useNetwork, useUI, defaultProbe, pivotComplexFrames, port1FromPivot } from '../../store/index.js';
 import BodePlot from './BodePlot.jsx';
 import NetworkControls from './NetworkControls.jsx';
 import NetworkReadout from './NetworkReadout.jsx';
-import SmithChart from './SmithChart.jsx';
+import SmithChart, { SmithChartModal } from './SmithChart.jsx';
 import Splitter from '../common/Splitter.jsx';
 import { findPeak, bandwidth, unityGainCrossover, phaseMargin, gainMargin, groupDelay, wrapPhase, smithTrace } from '../../lib/frequency.js';
 
@@ -83,6 +83,11 @@ export default function Network() {
     return smithTrace(freqs, port1, config.z0);
   }, [port1, freqs, config.z0]);
 
+  // Click-to-expand modal state for the Smith inset. Local to Network — the
+  // chart is small + densely-laid-out in the readout strip, the modal gives
+  // a usable working size with axis labels.
+  const [smithModalOpen, setSmithModalOpen] = useState(false);
+
   return (
     <div className="spectrum">
       <div className="spectrum-workspace" style={{ '--ctrl-width': `${controlPanelWidth}px` }}>
@@ -124,8 +129,21 @@ export default function Network() {
         showVSWR={config.showVSWR}
         z0={config.z0}
       >
-        {config.showSmith && smith && <SmithChart trace={smith} z0={config.z0} />}
+        {config.showSmith && smith && (
+          <SmithChart
+            trace={smith}
+            z0={config.z0}
+            onExpand={() => setSmithModalOpen(true)}
+          />
+        )}
       </NetworkReadout>
+      {smithModalOpen && smith && (
+        <SmithChartModal
+          trace={smith}
+          z0={config.z0}
+          onClose={() => setSmithModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
