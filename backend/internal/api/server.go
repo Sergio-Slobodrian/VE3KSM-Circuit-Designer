@@ -107,6 +107,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/waveform/import", s.handleWaveformImport)
 	mux.HandleFunc("/api/examples", s.handleExamplesList)
 	mux.HandleFunc("/api/examples/", s.handleExamplesLoad)
+	mux.HandleFunc("/api/inductor/design", s.handleInductorDesign)
+	mux.HandleFunc("/api/inductor/cores", s.handleInductorCores)
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	return mux
 }
