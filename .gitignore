@@ -32,3 +32,6 @@ library
 ltspice
 symbol_enhancement.md
 examples
+KICKOFF.md
+DESIGN.md
+inductor_designer.md

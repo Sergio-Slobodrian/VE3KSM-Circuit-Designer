@@ -183,3 +183,60 @@ func ValidateSpiralParams(p *SpiralParams) error {
 	}
 	return nil
 }
+
+// ValidateCoupledParams enforces the §9 rules specific to coupled mode.
+// The per-winding sub-params are validated when their respective handler
+// runs — no need to duplicate those checks here.
+func ValidateCoupledParams(p *CoupledParams) error {
+	if p.Primary.Mode != ModeSolenoid && p.Primary.Mode != ModeToroid {
+		return &ValidationError{
+			Code:    "validation.field",
+			Field:   "params.primary.mode",
+			Message: fmt.Sprintf("primary mode must be solenoid or toroid, got %q", p.Primary.Mode),
+		}
+	}
+	if p.Secondary.Mode != ModeSolenoid && p.Secondary.Mode != ModeToroid {
+		return &ValidationError{
+			Code:    "validation.field",
+			Field:   "params.secondary.mode",
+			Message: fmt.Sprintf("secondary mode must be solenoid or toroid, got %q", p.Secondary.Mode),
+		}
+	}
+	if p.SharedCore && p.Primary.Mode != p.Secondary.Mode {
+		return &ValidationError{
+			Code:    "validation.coupled_mismatch",
+			Field:   "params.shared_core",
+			Message: "shared_core requires primary.mode == secondary.mode",
+		}
+	}
+	if p.CouplingKOverride != nil {
+		k := *p.CouplingKOverride
+		if k <= 0 || k > 1 {
+			return &ValidationError{
+				Code:    "validation.field",
+				Field:   "params.coupling_k_override",
+				Message: "coupling_k_override must be in (0, 1]",
+			}
+		}
+	}
+	if !p.SharedCore && p.CouplingKOverride == nil {
+		// Geometric estimate path — need geometry + separation.
+		switch p.Geometry {
+		case "coaxial", "side_by_side", "stacked":
+		default:
+			return &ValidationError{
+				Code:    "validation.field",
+				Field:   "params.geometry",
+				Message: fmt.Sprintf("geometry must be coaxial|side_by_side|stacked when shared_core=false and no k override, got %q", p.Geometry),
+			}
+		}
+		if p.SeparationM <= 0 {
+			return &ValidationError{
+				Code:    "validation.field",
+				Field:   "params.separation_m",
+				Message: "separation_m must be > 0 when shared_core=false and no k override",
+			}
+		}
+	}
+	return nil
+}

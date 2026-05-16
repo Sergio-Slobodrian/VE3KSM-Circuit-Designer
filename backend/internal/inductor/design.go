@@ -33,11 +33,7 @@ func Design(req *Request, cat *Catalog) (*Response, error) {
 	case ModeSpiral:
 		return designSpiral(req, cat)
 	case ModeCoupled:
-		return nil, &ValidationError{
-			Code:    "validation.field",
-			Field:   "mode",
-			Message: fmt.Sprintf("mode %q is not implemented in this build (stage 3)", req.Mode),
-		}
+		return designCoupled(req, cat)
 	default:
 		// ValidateRequest already filtered this, but the compiler can't see that.
 		return nil, &ValidationError{

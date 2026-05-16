@@ -389,14 +389,6 @@ func TestDesign_Solenoid_RejectsToroidCore(t *testing.T) {
 	}
 }
 
-func TestDesign_RejectsUnimplementedModes(t *testing.T) {
-	for _, m := range []Mode{ModeCoupled} {
-		req := &Request{Mode: m, FrequencyHz: 1e6, Params: json.RawMessage(`{}`)}
-		if _, err := Design(req, nil); err == nil {
-			t.Errorf("%s: expected not-implemented error", m)
-		}
-	}
-}
 
 // ── Toroid physics ───────────────────────────────────────────────────────────
 
@@ -858,6 +850,298 @@ func TestDesign_Spiral_ParasiticCapacitanceUsesSubstrate(t *testing.T) {
 		t.Errorf("higher ε_r should lower SRF: low=%v high=%v", *respLow.SRFHz, *respHigh.SRFHz)
 	}
 }
+
+// ── Coupled physics ──────────────────────────────────────────────────────────
+
+func toroidWinding(t *testing.T, turns int, presetID string, awg int) CoupledWinding {
+	t.Helper()
+	p := ToroidParams{
+		Turns: turns,
+		Core:  CoreRef{Kind: "preset", ID: presetID},
+		Wire:  WireSpec{AWG: &awg, Material: "copper"},
+	}
+	raw, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("marshal toroid: %v", err)
+	}
+	return CoupledWinding{Mode: ModeToroid, Params: raw}
+}
+
+func solenoidWinding(t *testing.T, turns float64, diameterM, lengthM float64, awg int) CoupledWinding {
+	t.Helper()
+	p := SolenoidParams{
+		Turns:     turns,
+		DiameterM: diameterM,
+		LengthM:   lengthM,
+		Wire:      WireSpec{AWG: &awg, Material: "copper"},
+		Winding:   "close_wound",
+	}
+	raw, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("marshal solenoid: %v", err)
+	}
+	return CoupledWinding{Mode: ModeSolenoid, Params: raw}
+}
+
+func TestDesign_Coupled_SharedToroid_4to1(t *testing.T) {
+	// T-50-2 4:1 step-down: 20T primary, 10T secondary.
+	// L_p = 4.9·400 = 1960 nH; L_s = 4.9·100 = 490 nH.
+	// k = 0.99 → M ≈ 0.99·sqrt(1960·490) ≈ 970 nH.
+	cp := CoupledParams{
+		Primary:    toroidWinding(t, 20, "T-50-2", 26),
+		Secondary:  toroidWinding(t, 10, "T-50-2", 26),
+		SharedCore: true,
+	}
+	raw, _ := json.Marshal(cp)
+	req := &Request{Mode: ModeCoupled, FrequencyHz: 7.1e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	if resp.QAtFrequency != nil {
+		t.Errorf("coupled Q should be nil, got %v", *resp.QAtFrequency)
+	}
+	if resp.SRFHz != nil {
+		t.Errorf("coupled SRF should be nil, got %v", *resp.SRFHz)
+	}
+	d, ok := resp.Details.(CoupledDetails)
+	if !ok {
+		t.Fatalf("details type: %T", resp.Details)
+	}
+	if math.Abs(d.CouplingK-0.99) > 1e-9 {
+		t.Errorf("shared-core toroid k: got %.3f, want 0.99", d.CouplingK)
+	}
+	// Mutual ~ 970 nH
+	mNh := d.MutualInductanceH * 1e9
+	if math.Abs(mNh-970) > 20 {
+		t.Errorf("M: got %.0f nH, want ~970", mNh)
+	}
+	if math.Abs(d.TurnsRatio-0.5) > 1e-9 {
+		t.Errorf("turns_ratio: got %v, want 0.5", d.TurnsRatio)
+	}
+	if math.Abs(d.ImpedanceRatio-0.25) > 1e-9 {
+		t.Errorf("Z_ratio: got %v, want 0.25", d.ImpedanceRatio)
+	}
+	// Leakage L = L · (1 − k²) = L · 0.0199. For L_p = 1960 nH, leakage ≈ 39 nH.
+	leakP := d.LeakageInductancePrimaryH * 1e9
+	if math.Abs(leakP-39.0) > 2 {
+		t.Errorf("primary leakage: got %.1f nH, want ~39", leakP)
+	}
+}
+
+func TestDesign_Coupled_KOverride(t *testing.T) {
+	cp := CoupledParams{
+		Primary:           toroidWinding(t, 20, "T-50-2", 26),
+		Secondary:         toroidWinding(t, 10, "T-50-2", 26),
+		SharedCore:        true,
+		CouplingKOverride: ptrFloat(0.85),
+	}
+	raw, _ := json.Marshal(cp)
+	req := &Request{Mode: ModeCoupled, FrequencyHz: 7.1e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	d := resp.Details.(CoupledDetails)
+	if math.Abs(d.CouplingK-0.85) > 1e-9 {
+		t.Errorf("k override: got %v, want 0.85", d.CouplingK)
+	}
+	// Override should NOT emit the geometric-estimate warning.
+	for _, w := range resp.Warnings {
+		if w.Code == "coupling_geometry_estimate" {
+			t.Errorf("override path should not emit coupling_geometry_estimate")
+		}
+	}
+}
+
+func TestDesign_Coupled_GeometricEstimate_Coaxial(t *testing.T) {
+	// Two air-cored solenoids, 10mm diameter, 5mm separation, coaxial.
+	// k ≈ 1/(1+0.5³) = 1/1.125 = 0.889 (clamped slightly under by 0.999 cap).
+	cp := CoupledParams{
+		Primary:     solenoidWinding(t, 20, 0.010, 0.020, 24),
+		Secondary:   solenoidWinding(t, 20, 0.010, 0.020, 24),
+		SharedCore:  false,
+		Geometry:    "coaxial",
+		SeparationM: 0.005,
+	}
+	raw, _ := json.Marshal(cp)
+	req := &Request{Mode: ModeCoupled, FrequencyHz: 7.1e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	d := resp.Details.(CoupledDetails)
+	if math.Abs(d.CouplingK-0.889) > 0.01 {
+		t.Errorf("coaxial k: got %.3f, want ~0.889", d.CouplingK)
+	}
+	// Must warn that this is geometric.
+	found := false
+	for _, w := range resp.Warnings {
+		if w.Code == "coupling_geometry_estimate" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected coupling_geometry_estimate warning, got %v", resp.Warnings)
+	}
+}
+
+func TestDesign_Coupled_GeometricEstimate_StackedDecays(t *testing.T) {
+	// Same coils, "stacked" geometry with same separation — should give
+	// lower k than coaxial (faster decay).
+	base := CoupledParams{
+		Primary:     solenoidWinding(t, 20, 0.010, 0.020, 24),
+		Secondary:   solenoidWinding(t, 20, 0.010, 0.020, 24),
+		SharedCore:  false,
+		SeparationM: 0.005,
+	}
+	coax := base
+	coax.Geometry = "coaxial"
+	stacked := base
+	stacked.Geometry = "stacked"
+
+	rawC, _ := json.Marshal(coax)
+	rawS, _ := json.Marshal(stacked)
+	respC, _ := Design(&Request{Mode: ModeCoupled, FrequencyHz: 7e6, Params: rawC}, nil)
+	respS, _ := Design(&Request{Mode: ModeCoupled, FrequencyHz: 7e6, Params: rawS}, nil)
+
+	dC := respC.Details.(CoupledDetails)
+	dS := respS.Details.(CoupledDetails)
+	if dS.CouplingK >= dC.CouplingK {
+		t.Errorf("stacked k (%.3f) should be < coaxial k (%.3f)", dS.CouplingK, dC.CouplingK)
+	}
+}
+
+func TestDesign_Coupled_SideBySide_LowK(t *testing.T) {
+	cp := CoupledParams{
+		Primary:     solenoidWinding(t, 20, 0.010, 0.020, 24),
+		Secondary:   solenoidWinding(t, 20, 0.010, 0.020, 24),
+		SharedCore:  false,
+		Geometry:    "side_by_side",
+		SeparationM: 0.020, // 2× the diameter
+	}
+	raw, _ := json.Marshal(cp)
+	req := &Request{Mode: ModeCoupled, FrequencyHz: 7e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	d := resp.Details.(CoupledDetails)
+	// (D/(2s))² = (0.01/0.04)² = 0.0625 — quite weak.
+	if d.CouplingK > 0.1 {
+		t.Errorf("side_by_side k: got %.3f, want < 0.1 at 2D separation", d.CouplingK)
+	}
+}
+
+func TestDesign_Coupled_RejectsSharedCoreModeMismatch(t *testing.T) {
+	cp := CoupledParams{
+		Primary:    solenoidWinding(t, 20, 0.010, 0.020, 24),
+		Secondary:  toroidWinding(t, 10, "T-50-2", 26),
+		SharedCore: true,
+	}
+	raw, _ := json.Marshal(cp)
+	req := &Request{Mode: ModeCoupled, FrequencyHz: 7e6, Params: raw}
+	_, err := Design(req, nil)
+	if err == nil {
+		t.Fatal("expected coupled_mismatch error")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) || ve.Code != "validation.coupled_mismatch" {
+		t.Errorf("expected validation.coupled_mismatch, got %v", err)
+	}
+}
+
+func TestDesign_Coupled_RejectsKOverrideOutOfRange(t *testing.T) {
+	for _, bad := range []float64{0, -0.5, 1.5, 2.0} {
+		cp := CoupledParams{
+			Primary:           toroidWinding(t, 20, "T-50-2", 26),
+			Secondary:         toroidWinding(t, 10, "T-50-2", 26),
+			SharedCore:        true,
+			CouplingKOverride: ptrFloat(bad),
+		}
+		raw, _ := json.Marshal(cp)
+		req := &Request{Mode: ModeCoupled, FrequencyHz: 7e6, Params: raw}
+		if _, err := Design(req, nil); err == nil {
+			t.Errorf("k=%v: expected error", bad)
+		}
+	}
+}
+
+func TestDesign_Coupled_RejectsNonSharedMissingGeometry(t *testing.T) {
+	cp := CoupledParams{
+		Primary:    solenoidWinding(t, 20, 0.010, 0.020, 24),
+		Secondary:  solenoidWinding(t, 20, 0.010, 0.020, 24),
+		SharedCore: false,
+		// no geometry, no separation, no override → invalid
+	}
+	raw, _ := json.Marshal(cp)
+	req := &Request{Mode: ModeCoupled, FrequencyHz: 7e6, Params: raw}
+	if _, err := Design(req, nil); err == nil {
+		t.Error("expected error for non-shared without geometry")
+	}
+}
+
+func TestDesign_Coupled_DCRIsSum(t *testing.T) {
+	cp := CoupledParams{
+		Primary:    toroidWinding(t, 20, "T-50-2", 26),
+		Secondary:  toroidWinding(t, 10, "T-50-2", 26),
+		SharedCore: true,
+	}
+	raw, _ := json.Marshal(cp)
+	req := &Request{Mode: ModeCoupled, FrequencyHz: 7e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	// Re-run each winding solo to compare.
+	rawP, _ := json.Marshal(ToroidParams{
+		Turns: 20, Core: CoreRef{Kind: "preset", ID: "T-50-2"},
+		Wire: WireSpec{AWG: ptrInt(26), Material: "copper"},
+	})
+	respP, _ := Design(&Request{Mode: ModeToroid, FrequencyHz: 7e6, Params: rawP}, nil)
+	rawS, _ := json.Marshal(ToroidParams{
+		Turns: 10, Core: CoreRef{Kind: "preset", ID: "T-50-2"},
+		Wire: WireSpec{AWG: ptrInt(26), Material: "copper"},
+	})
+	respS, _ := Design(&Request{Mode: ModeToroid, FrequencyHz: 7e6, Params: rawS}, nil)
+
+	want := respP.DCResistanceOhm + respS.DCResistanceOhm
+	if math.Abs(resp.DCResistanceOhm-want) > 1e-9 {
+		t.Errorf("DCR: got %v, want %v (sum of windings)", resp.DCResistanceOhm, want)
+	}
+}
+
+func TestDesign_Coupled_SubWindingErrorBubbles(t *testing.T) {
+	// Force the secondary toroid to fail by referencing an unknown core.
+	bad := ToroidParams{
+		Turns: 10,
+		Core:  CoreRef{Kind: "preset", ID: "T-37-NOPE"},
+		Wire:  WireSpec{AWG: ptrInt(26), Material: "copper"},
+	}
+	rawBad, _ := json.Marshal(bad)
+	cp := CoupledParams{
+		Primary:    toroidWinding(t, 20, "T-50-2", 26),
+		Secondary:  CoupledWinding{Mode: ModeToroid, Params: rawBad},
+		SharedCore: true,
+	}
+	raw, _ := json.Marshal(cp)
+	req := &Request{Mode: ModeCoupled, FrequencyHz: 7e6, Params: raw}
+	_, err := Design(req, nil)
+	if err == nil {
+		t.Fatal("expected sub-winding error to bubble up")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *ValidationError, got %T", err)
+	}
+	// Field should be re-anchored under params.secondary.*
+	if want := "params.secondary."; len(ve.Field) < len(want) || ve.Field[:len(want)] != want {
+		t.Errorf("field path: got %q, want prefix %q", ve.Field, want)
+	}
+}
+
+func ptrFloat(f float64) *float64 { return &f }
+func ptrInt(i int) *int           { return &i }
 
 func TestCatalog_FullV1Set(t *testing.T) {
 	cat, err := DefaultCatalog()

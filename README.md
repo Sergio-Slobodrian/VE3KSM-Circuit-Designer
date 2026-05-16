@@ -80,15 +80,3 @@ cd frontend && npm install && npm run dev
 Vite gives you ~50ms hot-module-reload on `.jsx` edits, which is hard to
 give up while building UI. Once the UI work is done you can drop back to
 the single-process mode.
-
-### Smoke test
-
-Both modes should print `ngspice <version> ready, listening on :8080`
-from the Go side and show the five-tab placeholder shell in the browser.
-If they do, the scaffold is healthy.
-
-## Driving development
-
-Open `KICKOFF.md`, copy the prompt, paste it into Claude Code (or Cursor, Aider,
-etc.). The prompt is self-contained — it points the assistant at `DESIGN.md` and
-the mockups, and gives it a first milestone with explicit acceptance criteria.
