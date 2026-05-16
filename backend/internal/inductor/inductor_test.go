@@ -390,10 +390,234 @@ func TestDesign_Solenoid_RejectsToroidCore(t *testing.T) {
 }
 
 func TestDesign_RejectsUnimplementedModes(t *testing.T) {
-	for _, m := range []Mode{ModeToroid, ModeSpiral, ModeCoupled} {
+	for _, m := range []Mode{ModeSpiral, ModeCoupled} {
 		req := &Request{Mode: m, FrequencyHz: 1e6, Params: json.RawMessage(`{}`)}
 		if _, err := Design(req, nil); err == nil {
-			t.Errorf("%s: expected stage-1 not-implemented error", m)
+			t.Errorf("%s: expected not-implemented error", m)
+		}
+	}
+}
+
+// ── Toroid physics ───────────────────────────────────────────────────────────
+
+func TestDesign_Toroid_T50_2_20Turns(t *testing.T) {
+	// Classic QRP reference: 20 turns on T-50-2 → AL=4.9 nH/N² → L ≈ 1.96 µH.
+	awg := 26
+	p := ToroidParams{
+		Turns:     20,
+		Core:      CoreRef{Kind: "preset", ID: "T-50-2"},
+		Wire:      WireSpec{AWG: &awg, Material: "copper"},
+		FillCheck: true,
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeToroid, FrequencyHz: 7.1e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	uH := resp.InductanceH * 1e6
+	if math.Abs(uH-1.96) > 0.05 {
+		t.Errorf("T-50-2 20T: got %.3f µH, want 1.96", uH)
+	}
+	if resp.SRFHz != nil {
+		t.Errorf("toroid SRF should be nil, got %v", resp.SRFHz)
+	}
+	if resp.QAtFrequency == nil || *resp.QAtFrequency < 10 {
+		t.Errorf("Q too low or nil: %v", resp.QAtFrequency)
+	}
+	d, ok := resp.Details.(ToroidDetails)
+	if !ok {
+		t.Fatalf("details type: %T", resp.Details)
+	}
+	if d.WireLengthM <= 0 {
+		t.Errorf("wire length: got %v", d.WireLengthM)
+	}
+	if d.FillFraction <= 0 || d.FillFraction > 1.0 {
+		t.Errorf("fill fraction out of plausible range: %v", d.FillFraction)
+	}
+}
+
+func TestDesign_Toroid_FT37_43_5Turns(t *testing.T) {
+	// 5 turns on FT-37-43 → AL=350 → L = 350·25 = 8750 nH = 8.75 µH.
+	awg := 22
+	p := ToroidParams{
+		Turns: 5,
+		Core:  CoreRef{Kind: "preset", ID: "FT-37-43"},
+		Wire:  WireSpec{AWG: &awg, Material: "copper"},
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeToroid, FrequencyHz: 7.0e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	uH := resp.InductanceH * 1e6
+	if math.Abs(uH-8.75) > 0.1 {
+		t.Errorf("FT-37-43 5T: got %.3f µH, want 8.75", uH)
+	}
+}
+
+func TestDesign_Toroid_FT50_77_30Turns_AudioRange(t *testing.T) {
+	// FT-50-77 (μ=2000) with 30 turns → AL=1100 → L=990 µH.
+	// Operating at 100 kHz (within material range).
+	awg := 24
+	p := ToroidParams{
+		Turns: 30,
+		Core:  CoreRef{Kind: "preset", ID: "FT-50-77"},
+		Wire:  WireSpec{AWG: &awg, Material: "copper"},
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeToroid, FrequencyHz: 100e3, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	uH := resp.InductanceH * 1e6
+	if math.Abs(uH-990.0) > 50.0 {
+		t.Errorf("FT-50-77 30T: got %.0f µH, want 990", uH)
+	}
+}
+
+func TestDesign_Toroid_WindowFillExceeded(t *testing.T) {
+	// T-37-2 has ID = 5.21 mm → inner circumference π·5.21 ≈ 16.4 mm.
+	// AWG 18 ≈ 1.02 mm → 50 turns × 1.02 = 51 mm, ~310% fill.
+	awg := 18
+	p := ToroidParams{
+		Turns:     50,
+		Core:      CoreRef{Kind: "preset", ID: "T-37-2"},
+		Wire:      WireSpec{AWG: &awg, Material: "copper"},
+		FillCheck: true,
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeToroid, FrequencyHz: 7.1e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	found := false
+	for _, w := range resp.Warnings {
+		if w.Code == "window_fill_exceeded" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected window_fill_exceeded warning, got %v", resp.Warnings)
+	}
+}
+
+func TestDesign_Toroid_NearSaturation(t *testing.T) {
+	// User core with tiny B_sat → 1 A reference current will saturate it.
+	// Use a small toroid geometry with high μ and very low B_sat.
+	p := ToroidParams{
+		Turns: 100,
+		Core: CoreRef{
+			Kind:     "user",
+			Geometry: "toroid",
+			Dimensions: map[string]any{
+				"od_m": 0.020, "id_m": 0.010, "h_m": 0.005,
+			},
+			Material: &CoreMaterial{
+				MuRInitial: 2000,
+				BSatT:      0.01, // very low — easy to saturate
+			},
+		},
+		Wire: WireSpec{DiameterM: 0.0005, Material: "copper"},
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeToroid, FrequencyHz: 100e3, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	found := false
+	for _, w := range resp.Warnings {
+		if w.Code == "near_saturation" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected near_saturation warning, got %v", resp.Warnings)
+	}
+}
+
+func TestDesign_Toroid_FrequencyOutOfRange(t *testing.T) {
+	// T-50-2 is rated 1–30 MHz; trying it at 100 kHz should warn.
+	awg := 24
+	p := ToroidParams{
+		Turns: 20,
+		Core:  CoreRef{Kind: "preset", ID: "T-50-2"},
+		Wire:  WireSpec{AWG: &awg, Material: "copper"},
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeToroid, FrequencyHz: 100e3, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	found := false
+	for _, w := range resp.Warnings {
+		if w.Code == "frequency_out_of_range" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected frequency_out_of_range warning, got %v", resp.Warnings)
+	}
+}
+
+func TestDesign_Toroid_RejectsSlugCore(t *testing.T) {
+	awg := 24
+	p := ToroidParams{
+		Turns: 10,
+		Core:  CoreRef{Kind: "preset", ID: "SLUG-IF-455"},
+		Wire:  WireSpec{AWG: &awg, Material: "copper"},
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeToroid, FrequencyHz: 1e6, Params: raw}
+	_, err := Design(req, nil)
+	if err == nil {
+		t.Fatal("expected error for slug core in toroid mode")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Errorf("expected *ValidationError, got %T", err)
+	}
+}
+
+func TestDesign_Toroid_RejectsZeroTurns(t *testing.T) {
+	awg := 24
+	p := ToroidParams{
+		Turns: 0,
+		Core:  CoreRef{Kind: "preset", ID: "T-50-2"},
+		Wire:  WireSpec{AWG: &awg, Material: "copper"},
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeToroid, FrequencyHz: 7e6, Params: raw}
+	if _, err := Design(req, nil); err == nil {
+		t.Error("expected zero-turns error")
+	}
+}
+
+func TestCatalog_FullV1Set(t *testing.T) {
+	cat, err := DefaultCatalog()
+	if err != nil {
+		t.Fatalf("catalog: %v", err)
+	}
+	wantIDs := []string{
+		"T-37-2", "T-50-2", "T-68-2", "T-80-2", "T-94-2", "T-106-2",
+		"T-37-6", "T-50-6", "T-68-6", "T-80-6",
+		"T-37-10", "T-50-10",
+		"FT-37-43", "FT-50-43", "FT-82-43", "FT-114-43",
+		"FT-37-61", "FT-50-61", "FT-82-61",
+		"FT-37-77", "FT-50-77",
+		"SLUG-IF-455",
+	}
+	for _, id := range wantIDs {
+		if _, ok := cat.Lookup(id); !ok {
+			t.Errorf("catalog missing %q", id)
 		}
 	}
 }

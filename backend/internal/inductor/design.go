@@ -28,11 +28,13 @@ func Design(req *Request, cat *Catalog) (*Response, error) {
 	switch req.Mode {
 	case ModeSolenoid:
 		return designSolenoid(req, cat)
-	case ModeToroid, ModeSpiral, ModeCoupled:
+	case ModeToroid:
+		return designToroid(req, cat)
+	case ModeSpiral, ModeCoupled:
 		return nil, &ValidationError{
 			Code:    "validation.field",
 			Field:   "mode",
-			Message: fmt.Sprintf("mode %q is not implemented in this build (stage 1)", req.Mode),
+			Message: fmt.Sprintf("mode %q is not implemented in this build (stage 2)", req.Mode),
 		}
 	default:
 		// ValidateRequest already filtered this, but the compiler can't see that.

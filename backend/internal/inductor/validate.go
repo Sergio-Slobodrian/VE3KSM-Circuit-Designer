@@ -72,3 +72,17 @@ func ValidateSolenoidParams(p *SolenoidParams) error {
 	}
 	return nil
 }
+
+// ValidateToroidParams enforces the §9 rules for toroid mode that don't
+// require resolving the core. The core itself (must exist, must be of
+// toroidal geometry) is checked by the handler after Resolve().
+func ValidateToroidParams(p *ToroidParams) error {
+	if p.Turns <= 0 {
+		return &ValidationError{
+			Code:    "validation.field",
+			Field:   "params.turns",
+			Message: "turns must be > 0",
+		}
+	}
+	return nil
+}

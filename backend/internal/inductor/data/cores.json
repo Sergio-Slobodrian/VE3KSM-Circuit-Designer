@@ -5,7 +5,7 @@
     "family": "iron_powder",
     "color_code": "red",
     "geometry": "toroid",
-    "dimensions": { "od_m": 0.0095, "id_m": 0.0053, "h_m": 0.0033 },
+    "dimensions": { "od_m": 0.00953, "id_m": 0.00521, "h_m": 0.00318 },
     "material": {
       "name": "Carbonyl E (Mix 2)",
       "mu_r_initial": 10,
@@ -21,7 +21,7 @@
     "family": "iron_powder",
     "color_code": "red",
     "geometry": "toroid",
-    "dimensions": { "od_m": 0.01270, "id_m": 0.00770, "h_m": 0.00480 },
+    "dimensions": { "od_m": 0.01270, "id_m": 0.00770, "h_m": 0.00483 },
     "material": {
       "name": "Carbonyl E (Mix 2)",
       "mu_r_initial": 10,
@@ -32,14 +32,177 @@
     "al_nh_per_n2_override": 4.9
   },
   {
+    "preset_id": "T-68-2",
+    "name": "Amidon T-68-2",
+    "family": "iron_powder",
+    "color_code": "red",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.01750, "id_m": 0.00940, "h_m": 0.00483 },
+    "material": {
+      "name": "Carbonyl E (Mix 2)",
+      "mu_r_initial": 10,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 7000000, "tan_delta": 0.012 },
+      "freq_range_hz": { "min": 1000000, "max": 30000000 }
+    },
+    "al_nh_per_n2_override": 5.7
+  },
+  {
+    "preset_id": "T-80-2",
+    "name": "Amidon T-80-2",
+    "family": "iron_powder",
+    "color_code": "red",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.02020, "id_m": 0.01260, "h_m": 0.00635 },
+    "material": {
+      "name": "Carbonyl E (Mix 2)",
+      "mu_r_initial": 10,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 7000000, "tan_delta": 0.012 },
+      "freq_range_hz": { "min": 1000000, "max": 30000000 }
+    },
+    "al_nh_per_n2_override": 5.5
+  },
+  {
+    "preset_id": "T-94-2",
+    "name": "Amidon T-94-2",
+    "family": "iron_powder",
+    "color_code": "red",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.02390, "id_m": 0.01400, "h_m": 0.00792 },
+    "material": {
+      "name": "Carbonyl E (Mix 2)",
+      "mu_r_initial": 10,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 7000000, "tan_delta": 0.012 },
+      "freq_range_hz": { "min": 1000000, "max": 30000000 }
+    },
+    "al_nh_per_n2_override": 8.4
+  },
+  {
+    "preset_id": "T-106-2",
+    "name": "Amidon T-106-2",
+    "family": "iron_powder",
+    "color_code": "red",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.02690, "id_m": 0.01450, "h_m": 0.01110 },
+    "material": {
+      "name": "Carbonyl E (Mix 2)",
+      "mu_r_initial": 10,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 7000000, "tan_delta": 0.012 },
+      "freq_range_hz": { "min": 1000000, "max": 30000000 }
+    },
+    "al_nh_per_n2_override": 13.5
+  },
+
+  {
+    "preset_id": "T-37-6",
+    "name": "Amidon T-37-6",
+    "family": "iron_powder",
+    "color_code": "yellow",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.00953, "id_m": 0.00521, "h_m": 0.00318 },
+    "material": {
+      "name": "Carbonyl SF (Mix 6)",
+      "mu_r_initial": 8,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 14000000, "tan_delta": 0.008 },
+      "freq_range_hz": { "min": 10000000, "max": 50000000 }
+    },
+    "al_nh_per_n2_override": 3.0
+  },
+  {
+    "preset_id": "T-50-6",
+    "name": "Amidon T-50-6",
+    "family": "iron_powder",
+    "color_code": "yellow",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.01270, "id_m": 0.00770, "h_m": 0.00483 },
+    "material": {
+      "name": "Carbonyl SF (Mix 6)",
+      "mu_r_initial": 8,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 14000000, "tan_delta": 0.008 },
+      "freq_range_hz": { "min": 10000000, "max": 50000000 }
+    },
+    "al_nh_per_n2_override": 4.0
+  },
+  {
+    "preset_id": "T-68-6",
+    "name": "Amidon T-68-6",
+    "family": "iron_powder",
+    "color_code": "yellow",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.01750, "id_m": 0.00940, "h_m": 0.00483 },
+    "material": {
+      "name": "Carbonyl SF (Mix 6)",
+      "mu_r_initial": 8,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 14000000, "tan_delta": 0.008 },
+      "freq_range_hz": { "min": 10000000, "max": 50000000 }
+    },
+    "al_nh_per_n2_override": 4.7
+  },
+  {
+    "preset_id": "T-80-6",
+    "name": "Amidon T-80-6",
+    "family": "iron_powder",
+    "color_code": "yellow",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.02020, "id_m": 0.01260, "h_m": 0.00635 },
+    "material": {
+      "name": "Carbonyl SF (Mix 6)",
+      "mu_r_initial": 8,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 14000000, "tan_delta": 0.008 },
+      "freq_range_hz": { "min": 10000000, "max": 50000000 }
+    },
+    "al_nh_per_n2_override": 4.5
+  },
+
+  {
+    "preset_id": "T-37-10",
+    "name": "Amidon T-37-10",
+    "family": "iron_powder",
+    "color_code": "black",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.00953, "id_m": 0.00521, "h_m": 0.00318 },
+    "material": {
+      "name": "Carbonyl W (Mix 10)",
+      "mu_r_initial": 6,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 50000000, "tan_delta": 0.010 },
+      "freq_range_hz": { "min": 30000000, "max": 100000000 }
+    },
+    "al_nh_per_n2_override": 2.5
+  },
+  {
+    "preset_id": "T-50-10",
+    "name": "Amidon T-50-10",
+    "family": "iron_powder",
+    "color_code": "black",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.01270, "id_m": 0.00770, "h_m": 0.00483 },
+    "material": {
+      "name": "Carbonyl W (Mix 10)",
+      "mu_r_initial": 6,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 50000000, "tan_delta": 0.010 },
+      "freq_range_hz": { "min": 30000000, "max": 100000000 }
+    },
+    "al_nh_per_n2_override": 3.1
+  },
+
+  {
     "preset_id": "FT-37-43",
     "name": "Fair-Rite FT-37-43",
     "family": "ferrite",
     "color_code": "none",
     "geometry": "toroid",
-    "dimensions": { "od_m": 0.00950, "id_m": 0.00475, "h_m": 0.00330 },
+    "dimensions": { "od_m": 0.00953, "id_m": 0.00475, "h_m": 0.00318 },
     "material": {
-      "name": "Fair-Rite 43",
+      "name": "Fair-Rite 43 (NiZn)",
       "mu_r_initial": 800,
       "b_sat_t": 0.275,
       "loss_factor_at_freq": { "freq_hz": 1000000, "tan_delta": 0.10 },
@@ -47,6 +210,137 @@
     },
     "al_nh_per_n2_override": 350.0
   },
+  {
+    "preset_id": "FT-50-43",
+    "name": "Fair-Rite FT-50-43",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.01270, "id_m": 0.00715, "h_m": 0.00495 },
+    "material": {
+      "name": "Fair-Rite 43 (NiZn)",
+      "mu_r_initial": 800,
+      "b_sat_t": 0.275,
+      "loss_factor_at_freq": { "freq_hz": 1000000, "tan_delta": 0.10 },
+      "freq_range_hz": { "min": 1000000, "max": 10000000 }
+    },
+    "al_nh_per_n2_override": 440.0
+  },
+  {
+    "preset_id": "FT-82-43",
+    "name": "Fair-Rite FT-82-43",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.02090, "id_m": 0.01310, "h_m": 0.00635 },
+    "material": {
+      "name": "Fair-Rite 43 (NiZn)",
+      "mu_r_initial": 800,
+      "b_sat_t": 0.275,
+      "loss_factor_at_freq": { "freq_hz": 1000000, "tan_delta": 0.10 },
+      "freq_range_hz": { "min": 1000000, "max": 10000000 }
+    },
+    "al_nh_per_n2_override": 470.0
+  },
+  {
+    "preset_id": "FT-114-43",
+    "name": "Fair-Rite FT-114-43",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.02900, "id_m": 0.01900, "h_m": 0.00752 },
+    "material": {
+      "name": "Fair-Rite 43 (NiZn)",
+      "mu_r_initial": 800,
+      "b_sat_t": 0.275,
+      "loss_factor_at_freq": { "freq_hz": 1000000, "tan_delta": 0.10 },
+      "freq_range_hz": { "min": 1000000, "max": 10000000 }
+    },
+    "al_nh_per_n2_override": 603.0
+  },
+
+  {
+    "preset_id": "FT-37-61",
+    "name": "Fair-Rite FT-37-61",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.00953, "id_m": 0.00475, "h_m": 0.00318 },
+    "material": {
+      "name": "Fair-Rite 61 (NiZn)",
+      "mu_r_initial": 125,
+      "b_sat_t": 0.235,
+      "loss_factor_at_freq": { "freq_hz": 25000000, "tan_delta": 0.05 },
+      "freq_range_hz": { "min": 10000000, "max": 200000000 }
+    },
+    "al_nh_per_n2_override": 55.0
+  },
+  {
+    "preset_id": "FT-50-61",
+    "name": "Fair-Rite FT-50-61",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.01270, "id_m": 0.00715, "h_m": 0.00495 },
+    "material": {
+      "name": "Fair-Rite 61 (NiZn)",
+      "mu_r_initial": 125,
+      "b_sat_t": 0.235,
+      "loss_factor_at_freq": { "freq_hz": 25000000, "tan_delta": 0.05 },
+      "freq_range_hz": { "min": 10000000, "max": 200000000 }
+    },
+    "al_nh_per_n2_override": 68.0
+  },
+  {
+    "preset_id": "FT-82-61",
+    "name": "Fair-Rite FT-82-61",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.02090, "id_m": 0.01310, "h_m": 0.00635 },
+    "material": {
+      "name": "Fair-Rite 61 (NiZn)",
+      "mu_r_initial": 125,
+      "b_sat_t": 0.235,
+      "loss_factor_at_freq": { "freq_hz": 25000000, "tan_delta": 0.05 },
+      "freq_range_hz": { "min": 10000000, "max": 200000000 }
+    },
+    "al_nh_per_n2_override": 73.0
+  },
+
+  {
+    "preset_id": "FT-37-77",
+    "name": "Fair-Rite FT-37-77",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.00953, "id_m": 0.00475, "h_m": 0.00318 },
+    "material": {
+      "name": "Fair-Rite 77 (MnZn)",
+      "mu_r_initial": 2000,
+      "b_sat_t": 0.51,
+      "loss_factor_at_freq": { "freq_hz": 100000, "tan_delta": 0.05 },
+      "freq_range_hz": { "min": 10000, "max": 1000000 }
+    },
+    "al_nh_per_n2_override": 884.0
+  },
+  {
+    "preset_id": "FT-50-77",
+    "name": "Fair-Rite FT-50-77",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.01270, "id_m": 0.00715, "h_m": 0.00495 },
+    "material": {
+      "name": "Fair-Rite 77 (MnZn)",
+      "mu_r_initial": 2000,
+      "b_sat_t": 0.51,
+      "loss_factor_at_freq": { "freq_hz": 100000, "tan_delta": 0.05 },
+      "freq_range_hz": { "min": 10000, "max": 1000000 }
+    },
+    "al_nh_per_n2_override": 1100.0
+  },
+
   {
     "preset_id": "SLUG-IF-455",
     "name": "Generic 455 kHz IF slug (ferrite)",
