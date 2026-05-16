@@ -1,0 +1,64 @@
+[
+  {
+    "preset_id": "T-37-2",
+    "name": "Amidon T-37-2",
+    "family": "iron_powder",
+    "color_code": "red",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.0095, "id_m": 0.0053, "h_m": 0.0033 },
+    "material": {
+      "name": "Carbonyl E (Mix 2)",
+      "mu_r_initial": 10,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 7000000, "tan_delta": 0.012 },
+      "freq_range_hz": { "min": 1000000, "max": 30000000 }
+    },
+    "al_nh_per_n2_override": 4.0
+  },
+  {
+    "preset_id": "T-50-2",
+    "name": "Amidon T-50-2",
+    "family": "iron_powder",
+    "color_code": "red",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.01270, "id_m": 0.00770, "h_m": 0.00480 },
+    "material": {
+      "name": "Carbonyl E (Mix 2)",
+      "mu_r_initial": 10,
+      "b_sat_t": 0.5,
+      "loss_factor_at_freq": { "freq_hz": 7000000, "tan_delta": 0.012 },
+      "freq_range_hz": { "min": 1000000, "max": 30000000 }
+    },
+    "al_nh_per_n2_override": 4.9
+  },
+  {
+    "preset_id": "FT-37-43",
+    "name": "Fair-Rite FT-37-43",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "toroid",
+    "dimensions": { "od_m": 0.00950, "id_m": 0.00475, "h_m": 0.00330 },
+    "material": {
+      "name": "Fair-Rite 43",
+      "mu_r_initial": 800,
+      "b_sat_t": 0.275,
+      "loss_factor_at_freq": { "freq_hz": 1000000, "tan_delta": 0.10 },
+      "freq_range_hz": { "min": 1000000, "max": 10000000 }
+    },
+    "al_nh_per_n2_override": 350.0
+  },
+  {
+    "preset_id": "SLUG-IF-455",
+    "name": "Generic 455 kHz IF slug (ferrite)",
+    "family": "ferrite",
+    "color_code": "none",
+    "geometry": "slug",
+    "dimensions": { "diameter_m": 0.006, "length_m": 0.012 },
+    "material": {
+      "name": "Generic IF ferrite",
+      "mu_r_initial": 125,
+      "b_sat_t": 0.35,
+      "freq_range_hz": { "min": 100000, "max": 5000000 }
+    }
+  }
+]
