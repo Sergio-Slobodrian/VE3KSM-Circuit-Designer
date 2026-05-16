@@ -390,7 +390,7 @@ func TestDesign_Solenoid_RejectsToroidCore(t *testing.T) {
 }
 
 func TestDesign_RejectsUnimplementedModes(t *testing.T) {
-	for _, m := range []Mode{ModeSpiral, ModeCoupled} {
+	for _, m := range []Mode{ModeCoupled} {
 		req := &Request{Mode: m, FrequencyHz: 1e6, Params: json.RawMessage(`{}`)}
 		if _, err := Design(req, nil); err == nil {
 			t.Errorf("%s: expected not-implemented error", m)
@@ -598,6 +598,264 @@ func TestDesign_Toroid_RejectsZeroTurns(t *testing.T) {
 	req := &Request{Mode: ModeToroid, FrequencyHz: 7e6, Params: raw}
 	if _, err := Design(req, nil); err == nil {
 		t.Error("expected zero-turns error")
+	}
+}
+
+// ── Spiral physics ───────────────────────────────────────────────────────────
+
+func fr4Substrate() SpiralSubstrate {
+	return SpiralSubstrate{
+		ThicknessM:       0.0016,    // 1.6 mm
+		EpsilonR:         4.4,       // FR-4
+		TanDelta:         0.02,      // FR-4
+		CopperThicknessM: 0.0000350, // 1 oz copper
+	}
+}
+
+func TestDesign_Spiral_Square_5T_Reference(t *testing.T) {
+	// 5T square, OD=6mm, ID=2mm, w=0.2mm, s=0.2mm.
+	// d_avg = 4mm, ρ = 4/8 = 0.5
+	// L = 2.34·μ₀·25·4e-3 / (1+2.75·0.5) ≈ 124 nH
+	p := SpiralParams{
+		Shape:          "square",
+		Turns:          5,
+		OuterDiameterM: 0.006,
+		InnerDiameterM: 0.002,
+		TraceWidthM:    0.0002,
+		TraceSpacingM:  0.0002,
+		Substrate:      fr4Substrate(),
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	nH := resp.InductanceH * 1e9
+	if math.Abs(nH-124.0) > 3.0 {
+		t.Errorf("square 5T: got %.1f nH, want ~124", nH)
+	}
+	d, ok := resp.Details.(SpiralDetails)
+	if !ok {
+		t.Fatalf("details type: %T", resp.Details)
+	}
+	if d.K1 != 2.34 || d.K2 != 2.75 {
+		t.Errorf("square constants: K1=%v K2=%v want 2.34/2.75", d.K1, d.K2)
+	}
+	if d.TraceLengthM <= 0 {
+		t.Error("trace length should be positive")
+	}
+	if d.QConductor <= 0 || d.QDielectric <= 0 {
+		t.Errorf("both Q components should be positive: cond=%v diel=%v", d.QConductor, d.QDielectric)
+	}
+	if resp.SRFHz == nil {
+		t.Fatal("SRF should be computed for spiral")
+	}
+}
+
+func TestDesign_Spiral_Circular_HigherThanSquare(t *testing.T) {
+	// Same geometry, square vs circular — circular has K1=2.46 > 2.34,
+	// so should yield a slightly higher L for the same params.
+	base := SpiralParams{
+		Turns:          5,
+		OuterDiameterM: 0.006,
+		InnerDiameterM: 0.002,
+		TraceWidthM:    0.0002,
+		TraceSpacingM:  0.0002,
+		Substrate:      fr4Substrate(),
+	}
+	square := base
+	square.Shape = "square"
+	rawSq, _ := json.Marshal(square)
+	respSq, err := Design(&Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: rawSq}, nil)
+	if err != nil {
+		t.Fatalf("square: %v", err)
+	}
+
+	circ := base
+	circ.Shape = "circular"
+	rawC, _ := json.Marshal(circ)
+	respC, err := Design(&Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: rawC}, nil)
+	if err != nil {
+		t.Fatalf("circular: %v", err)
+	}
+	if respC.InductanceH <= respSq.InductanceH {
+		t.Errorf("circular L (%.3e) should exceed square L (%.3e) at same geometry",
+			respC.InductanceH, respSq.InductanceH)
+	}
+}
+
+func TestDesign_Spiral_AllShapes(t *testing.T) {
+	for _, shape := range []string{"square", "circular", "hexagonal", "octagonal"} {
+		p := SpiralParams{
+			Shape:          shape,
+			Turns:          5,
+			OuterDiameterM: 0.006,
+			InnerDiameterM: 0.002,
+			TraceWidthM:    0.0002,
+			TraceSpacingM:  0.0002,
+			Substrate:      fr4Substrate(),
+		}
+		raw, _ := json.Marshal(p)
+		req := &Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: raw}
+		resp, err := Design(req, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", shape, err)
+		}
+		if resp.InductanceH <= 0 {
+			t.Errorf("%s: non-positive L: %v", shape, resp.InductanceH)
+		}
+	}
+}
+
+func TestDesign_Spiral_FitCheckRejects(t *testing.T) {
+	// OD=2mm, ID=1mm, w=0.2mm, s=0.2mm, N=5.
+	// Available radial span = 0.5 mm; required ≈ 1.8 mm — fails.
+	p := SpiralParams{
+		Shape:          "square",
+		Turns:          5,
+		OuterDiameterM: 0.002,
+		InnerDiameterM: 0.001,
+		TraceWidthM:    0.0002,
+		TraceSpacingM:  0.0002,
+		Substrate:      fr4Substrate(),
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: raw}
+	_, err := Design(req, nil)
+	if err == nil {
+		t.Fatal("expected fit-check error")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Errorf("expected *ValidationError, got %T", err)
+	}
+}
+
+func TestDesign_Spiral_RejectsBadShape(t *testing.T) {
+	p := SpiralParams{
+		Shape:          "trapezoidal",
+		Turns:          5,
+		OuterDiameterM: 0.006,
+		InnerDiameterM: 0.002,
+		TraceWidthM:    0.0002,
+		TraceSpacingM:  0.0002,
+		Substrate:      fr4Substrate(),
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: raw}
+	if _, err := Design(req, nil); err == nil {
+		t.Error("expected bad-shape error")
+	}
+}
+
+func TestDesign_Spiral_RejectsZeroTanDelta(t *testing.T) {
+	sub := fr4Substrate()
+	sub.TanDelta = 0 // explicitly invalid
+	p := SpiralParams{
+		Shape:          "square",
+		Turns:          5,
+		OuterDiameterM: 0.006,
+		InnerDiameterM: 0.002,
+		TraceWidthM:    0.0002,
+		TraceSpacingM:  0.0002,
+		Substrate:      sub,
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: raw}
+	if _, err := Design(req, nil); err == nil {
+		t.Error("expected tan_delta-required error")
+	}
+}
+
+func TestDesign_Spiral_QCombination(t *testing.T) {
+	// Q_total should be less than either Q_conductor or Q_dielectric alone
+	// (parallel combination of losses).
+	p := SpiralParams{
+		Shape:          "square",
+		Turns:          8,
+		OuterDiameterM: 0.010,
+		InnerDiameterM: 0.003,
+		TraceWidthM:    0.00015,
+		TraceSpacingM:  0.00015,
+		Substrate:      fr4Substrate(),
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeSpiral, FrequencyHz: 100e6, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	d := resp.Details.(SpiralDetails)
+	if resp.QAtFrequency == nil {
+		t.Fatal("Q is nil")
+	}
+	q := *resp.QAtFrequency
+	if q > d.QConductor+0.01 || q > d.QDielectric+0.01 {
+		t.Errorf("Q_total (%.2f) should not exceed either component (cond=%.2f, diel=%.2f)",
+			q, d.QConductor, d.QDielectric)
+	}
+}
+
+func TestDesign_Spiral_AboveSRFWarning(t *testing.T) {
+	// Small dense spiral with a high parasitic C → low SRF.
+	// Then ask for a frequency well above it.
+	p := SpiralParams{
+		Shape:          "square",
+		Turns:          20,
+		OuterDiameterM: 0.005,
+		InnerDiameterM: 0.001,
+		TraceWidthM:    0.00005,
+		TraceSpacingM:  0.00005,
+		Substrate:      fr4Substrate(),
+	}
+	raw, _ := json.Marshal(p)
+	req := &Request{Mode: ModeSpiral, FrequencyHz: 50e9, Params: raw}
+	resp, err := Design(req, nil)
+	if err != nil {
+		t.Fatalf("design: %v", err)
+	}
+	found := false
+	for _, w := range resp.Warnings {
+		if w.Code == "above_srf" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected above_srf warning at f=50 GHz, got %v (SRF=%v)", resp.Warnings, resp.SRFHz)
+	}
+}
+
+func TestDesign_Spiral_ParasiticCapacitanceUsesSubstrate(t *testing.T) {
+	// Higher εr → higher parasitic C → lower SRF.
+	base := SpiralParams{
+		Shape:          "square",
+		Turns:          5,
+		OuterDiameterM: 0.006,
+		InnerDiameterM: 0.002,
+		TraceWidthM:    0.0002,
+		TraceSpacingM:  0.0002,
+		Substrate:      fr4Substrate(),
+	}
+	lowEr := base
+	lowEr.Substrate.EpsilonR = 1.0 // air
+	rawLow, _ := json.Marshal(lowEr)
+	respLow, _ := Design(&Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: rawLow}, nil)
+
+	highEr := base
+	highEr.Substrate.EpsilonR = 10.0
+	rawHigh, _ := json.Marshal(highEr)
+	respHigh, _ := Design(&Request{Mode: ModeSpiral, FrequencyHz: 1e9, Params: rawHigh}, nil)
+
+	dLow := respLow.Details.(SpiralDetails)
+	dHigh := respHigh.Details.(SpiralDetails)
+	if dHigh.ParasiticCapacitanceF <= dLow.ParasiticCapacitanceF {
+		t.Errorf("C_par should increase with ε_r: low=%.3e high=%.3e",
+			dLow.ParasiticCapacitanceF, dHigh.ParasiticCapacitanceF)
+	}
+	if respHigh.SRFHz != nil && respLow.SRFHz != nil && *respHigh.SRFHz >= *respLow.SRFHz {
+		t.Errorf("higher ε_r should lower SRF: low=%v high=%v", *respLow.SRFHz, *respHigh.SRFHz)
 	}
 }
 
